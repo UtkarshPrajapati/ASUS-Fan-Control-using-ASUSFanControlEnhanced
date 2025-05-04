@@ -22,8 +22,8 @@ Before running this script, you need:
 
 1.  **Clone or Download:** Get the `main.py` script. You can clone this repository if it's hosted here, or simply download the `main.py` file.
     ```bash
-    git clone <repository_url>
-    cd AsusFanControlEnhanced # Or wherever you saved the file
+    git clone https://github.com/UtkarshPrajapati/ASUS-Fan-Control-using-ASUSFanControlEnhanced
+    cd ASUS-Fan-Control-using-ASUSFanControlEnhanced
     ```
 2.  **Install `AsusFanControl.exe`:** Ensure `AsusFanControl.exe` is accessible (either in the same directory or in your system PATH).
 
