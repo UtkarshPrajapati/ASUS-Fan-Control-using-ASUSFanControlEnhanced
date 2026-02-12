@@ -87,12 +87,36 @@ def load_config(config_path: str = "config.json") -> Dict[str, Any]:
 
 
 def _is_interactive_user_session() -> bool:
-    """Return True when a desktop/user session is available for tray UI."""
+    """Return True when a desktop/user session is available for tray UI.
+
+    Some scheduled-task logon launches have an empty SESSIONNAME even though
+    they are interactive. To avoid false negatives, fall back to Windows
+    session-id detection: session 0 is non-interactive service context.
+    """
     if sys.platform != "win32":
         return True
+
     # In startup tasks running before login this is commonly "Services".
     session_name = os.environ.get("SESSIONNAME", "").strip().lower()
-    return session_name not in {"", "services"}
+    if session_name == "services":
+        return False
+    if session_name.startswith("console") or session_name.startswith("rdp-"):
+        return True
+
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        process_id = kernel32.GetCurrentProcessId()
+        session_id = ctypes.c_uint()
+        ok = kernel32.ProcessIdToSessionId(process_id, ctypes.byref(session_id))
+        if ok:
+            return session_id.value != 0
+    except Exception:
+        pass
+
+    # If we cannot determine reliably, prefer allowing tray startup.
+    return True
 
 
 def _enable_ansi_colors() -> bool:
