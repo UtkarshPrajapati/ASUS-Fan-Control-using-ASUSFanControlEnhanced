@@ -199,6 +199,26 @@ class ColoredFormatter(logging.Formatter):
         return msg
 
 
+class SafeRotatingFileHandler(RotatingFileHandler):
+    """Rotating file handler that gracefully skips rollover on Windows locks.
+
+    When two processes briefly touch the same log file, a rollover rename can
+    fail with WinError 32 (file in use). Instead of printing a logging
+    traceback, this handler keeps the current log file open and continues.
+    """
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except PermissionError:
+            # Another process is using the log during rename. Skip rotation.
+            try:
+                if self.stream is None:
+                    self.stream = self._open()
+            except Exception:
+                pass
+
+
 def setup_logger(
     log_file: str = "fan_control.log",
     max_bytes: int = 5000,
@@ -213,7 +233,7 @@ def setup_logger(
     fmt_str = "%(asctime)s - %(levelname)s - %(message)s"
 
     # Rotating file handler (keeps log size bounded) -- no colours in log file
-    file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+    file_handler = SafeRotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
     file_handler.setFormatter(logging.Formatter(fmt_str))
     logger.addHandler(file_handler)
 

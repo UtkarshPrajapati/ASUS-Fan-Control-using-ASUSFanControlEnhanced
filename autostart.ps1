@@ -18,6 +18,7 @@ param(
 $TaskName = "ASUSFanControlEnhanced"
 $TrayTaskName = "ASUSFanControlEnhancedTray"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$TrayLauncher = Join-Path $ScriptDir "launch_tray.ps1"
 $UserId = "$env:USERDOMAIN\$env:USERNAME"
 
 # Resolve a real python.exe path (NOT the WindowsApps alias, which fails with
@@ -54,6 +55,10 @@ switch ($Action) {
         $MainScript = Join-Path $ScriptDir "main.py"
         if (-not (Test-Path $MainScript)) {
             Write-Error "main.py not found at $MainScript"
+            exit 1
+        }
+        if (-not (Test-Path $TrayLauncher)) {
+            Write-Error "launch_tray.ps1 not found at $TrayLauncher"
             exit 1
         }
         Write-Host "Using Python: $PythonExe" -ForegroundColor Green
@@ -101,10 +106,11 @@ switch ($Action) {
             -Force `
             -ErrorAction Stop | Out-Null
 
-        # Tray/UI task (runs at user logon in interactive desktop session)
+        # Tray/UI task (runs at user logon in interactive desktop session).
+        # It stops the startup task first to avoid duplicate controller loops.
         $TrayAction = New-ScheduledTaskAction `
-            -Execute $PythonExe `
-            -Argument "`"$MainScript`" --tray" `
+            -Execute "powershell.exe" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$TrayLauncher`" -PythonExe `"$PythonExe`" -MainScript `"$MainScript`" -CoreTaskName `"$TaskName`"" `
             -WorkingDirectory $ScriptDir
 
         $TrayTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
