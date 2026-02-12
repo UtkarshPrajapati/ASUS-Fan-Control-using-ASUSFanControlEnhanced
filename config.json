@@ -1,0 +1,17 @@
+{
+    "low_temp": 20,
+    "high_temp": 60,
+    "min_speed": 10,
+    "max_speed": 100,
+    "log_max_bytes": 5000,
+    "log_backup_count": 1,
+    "subprocess_timeout": 10,
+    "hysteresis_degrees": 3,
+    "smoothing_window": 5,
+    "spike_threshold": 15,
+    "max_consecutive_failures": 10,
+    "profile": "balanced",
+    "curve": null,
+    "enable_tray": true,
+    "enable_notifications": false
+}

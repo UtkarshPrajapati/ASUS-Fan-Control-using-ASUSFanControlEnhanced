@@ -1,90 +1,211 @@
-# ASUS Fan Control Enhanced 🌬️💻
+# ASUS Fan Control Enhanced
 
-A simple Python script to dynamically control your ASUS laptop's fan speeds based on CPU temperature, using the `AsusFanControl.exe` utility.
+A Python script to dynamically control ASUS laptop fan speeds based on CPU temperature, using the `AsusFanControl.exe` utility.
 
-## ✨ Features
+## Features
 
-*   **Dynamic Fan Control:** Adjusts fan speed based on CPU temperature using a linear interpolation curve. 📈
-*   **Temperature Thresholds:** Configurable low and high temperature thresholds for fan speed control. 🔥❄️
-*   **Adaptive Sleep:** The script sleeps longer when the CPU is cool and shorter when it's hot, reducing unnecessary checks. 😴⏱️
-*   **Logging:** Logs CPU temperature, fan speeds, and actions to a file (`fan_control.log`). 📄📊
-*   **Error Handling:** Includes basic error handling for subprocess calls and parsing issues. ✅
-*   **Efficient Updates:** Only attempts to set the fan speed if the required percentage has changed. 💪
+- **Dynamic Fan Control** -- adjusts fan speed using configurable multi-point curves with linear interpolation between waypoints.
+- **Preset Profiles** -- choose between *Silent*, *Balanced*, and *Performance* fan curves, or define your own custom curve.
+- **Temperature Smoothing** -- uses a rolling average over the last N readings to reduce noise from transient spikes.
+- **Hysteresis** -- resists decreasing fan speed until the temperature drops by a configurable margin, preventing oscillation.
+- **Spike Protection** -- detects sudden temperature jumps and immediately sets fans to 100%.
+- **Adaptive Sleep** -- polls more frequently when the CPU is hot and less frequently when it is cool.
+- **Startup Validation** -- verifies `AsusFanControl.exe` is present and responsive before entering the control loop.
+- **Consecutive Failure Tracking** -- escalates logging severity after repeated read failures and locks fans at 100%.
+- **External Configuration** -- all settings live in `config.json`; no need to edit source code.
+- **CLI Overrides** -- command-line arguments override config file values on the fly.
+- **System Tray Icon** -- enabled by default in interactive sessions, with profile switching and quit button.
+- **Temperature-Coloured Console Logs** -- terminal lines use a green->yellow->red gradient based on CPU temperature.
+- **Windows Toast Notifications** (optional) -- alerts on critical events like overheating or repeated failures.
+- **Driver Compatibility Detection** -- detects incompatible ASUS System Control Interface driver updates and logs rollback guidance.
+- **Rotating Log** -- logs to `fan_control.log` with automatic rotation to keep file size bounded.
+- **Console Output** -- live status output in the terminal alongside the log file.
+- **Auto-Start at System Startup** -- PowerShell script to register a Task Scheduler startup task.
 
-## 🚨 Prerequisites
+## Prerequisites
 
-Before running this script, you need:
+1. **Python 3.8+** installed and on PATH.
+2. **`AsusFanControl.exe`** -- place this utility in your system PATH or in the same directory as `main.py`. It is typically bundled with ASUS fan control software.
 
-1.  **Python 3:** Make sure Python 3 is installed on your system.
-2.  **`AsusFanControl.exe`:** This script relies heavily on the `AsusFanControl.exe` command-line utility. You need to download and place this executable in a location that is included in your system's PATH environment variable, or in the same directory as the script. You can usually find this utility bundled with fan control software for ASUS laptops or potentially in specific repositories dedicated to ASUS utilities.
+### Optional dependencies
 
-## 📦 Installation
+Install for extra features:
 
-1.  **Clone or Download:** Get the `main.py` script. You can clone this repository if it's hosted here, or simply download the `main.py` file.
-    ```bash
-    git clone https://github.com/UtkarshPrajapati/ASUS-Fan-Control-using-ASUSFanControlEnhanced
-    cd ASUS-Fan-Control-using-ASUSFanControlEnhanced
-    ```
-2.  **Install `AsusFanControl.exe`:** Ensure `AsusFanControl.exe` is accessible (either in the same directory or in your system PATH).
+```bash
+pip install -r requirements.txt
+```
 
-## ▶️ Usage
+| Package | Feature |
+|---------|---------|
+| `pystray` + `Pillow` | System tray icon (`--tray`) |
+| `winotify` | Windows toast notifications (`--notifications`) |
 
-To run the script, simply execute the `main.py` file using Python:
+## Installation
+
+```bash
+git clone https://github.com/UtkarshPrajapati/ASUS-Fan-Control-using-ASUSFanControlEnhanced
+cd ASUS-Fan-Control-using-ASUSFanControlEnhanced
+```
+
+Ensure `AsusFanControl.exe` is accessible (same directory or on PATH).
+
+## Usage
+
+### Basic
 
 ```bash
 python main.py
 ```
 
-The script will run in a loop, periodically checking the CPU temperature and adjusting the fan speed.
+The script validates `AsusFanControl.exe`, then runs in a loop adjusting fan speed. Press `Ctrl+C` to stop.
 
-To stop the script, press `Ctrl + C` in the terminal.
+### With a specific profile
 
-## ⚙️ Configuration
-
-You can adjust the fan control behavior by modifying the following constants at the beginning of the `main.py` file:
-
-*   `LOW_TEMP`: Temperature (°C) below which the fan speed is set to `MIN_SPEED`. (Default: `20`)
-*   `HIGH_TEMP`: Temperature (°C) above which the fan speed is set to `MAX_SPEED`. (Default: `60`)
-*   `MIN_SPEED`: Minimum fan speed percentage. (Default: `10`)
-*   `MAX_SPEED`: Maximum fan speed percentage. (Default: `100`)
-
-```python
-# Define constants for temperature and speed
-LOW_TEMP = 20    # Temperature where fan speed is at minimum
-HIGH_TEMP = 60   # Temperature where fan speed reaches maximum
-MIN_SPEED = 10   # Minimum fan speed percentage
-MAX_SPEED = 100  # Maximum fan speed percentage
+```bash
+python main.py --profile silent
+python main.py --profile performance
 ```
 
-You can also adjust the logging file size and backup count:
+### With CLI overrides
 
-*   `maxBytes`: Maximum size of the log file in bytes. (Default: `5000`)
-*   `backupCount`: Number of backup log files to keep. (Default: `1`)
-
-```python
-handler = RotatingFileHandler('fan_control.log', maxBytes=5000, backupCount=1)
+```bash
+python main.py --high-temp 55 --min-speed 20 --profile balanced
 ```
 
-*Note: For better maintainability, consider moving these configuration options to a separate configuration file or using command-line arguments in the future.*
+### With system tray icon
 
-## 📜 Logging
+```bash
+python main.py --tray
+```
 
-The script logs its activity to a file named `fan_control.log` in the same directory as the script. The `fanlog.bat` file provides a simple way to view the last 10 lines of this log dynamically using the `%USERPROFILE%` environment variable to locate the file. The log file includes timestamps, log levels (INFO, ERROR), and messages indicating the CPU temperature, current fan speeds reported by the utility, and the fan speed percentage being set.
+Tray is enabled by default in `config.json`. Use `--no-tray` to disable it.
 
-The log file uses a `RotatingFileHandler` to prevent it from growing too large, automatically creating backups when the size limit is reached.
+### With notifications
 
-## 🧠 How it Works
+```bash
+python main.py --notifications
+```
 
-1.  **Get Temperature:** The script repeatedly calls `AsusFanControl.exe --get-cpu-temp` to fetch the current CPU temperature.
-2.  **Decide Speed:** Based on the retrieved temperature, the `decide_fan_speed` function calculates the target fan speed percentage.
-    *   If the temperature is at or below `LOW_TEMP`, the speed is set to `MIN_SPEED`.
-    *   If the temperature is at or above `HIGH_TEMP`, the speed is set to `MAX_SPEED`.
-    *   Between `LOW_TEMP` and `HIGH_TEMP`, the speed is linearly interpolated between `MIN_SPEED` and `MAX_SPEED`.
-3.  **Set Speed:** The `set_fan_speed` function is called with the target percentage. It only executes the `AsusFanControl.exe --set-fan-speeds=<percentage>` command if the target percentage is different from the last one set, avoiding unnecessary command calls.
-4.  **Log Information:** The script logs the current CPU temperature and the fan speeds reported by the utility.
-5.  **Adaptive Sleep:** The `adaptive_sleep` function determines how long the script should wait before the next check. It sleeps for shorter durations when the CPU is hot and longer when it's cool.
-6.  **Loop:** The process repeats indefinitely until the script is stopped.
+### Skip startup validation
 
-## 👋 Contributing
+```bash
+python main.py --skip-validation
+```
 
-Contributions are welcome! If you have suggestions for improvements or new features, feel free to open an issue or submit a pull request.
+### All CLI options
+
+```
+--config PATH       Path to config JSON file (default: config.json)
+--profile NAME      Fan curve profile: silent, balanced, performance
+--low-temp N        Low temperature threshold (C)
+--high-temp N       High temperature threshold (C)
+--min-speed N       Minimum fan speed percentage
+--max-speed N       Maximum fan speed percentage
+--no-console        Disable console output (log to file only)
+--tray              Show system tray icon
+--no-tray           Disable system tray icon
+--notifications     Enable Windows toast notifications
+--skip-validation   Skip AsusFanControl.exe startup check
+```
+
+## Configuration
+
+All settings are in `config.json`. The file is optional -- if missing, built-in defaults are used. CLI arguments take the highest priority.
+
+```json
+{
+    "low_temp": 20,
+    "high_temp": 60,
+    "min_speed": 10,
+    "max_speed": 100,
+    "log_max_bytes": 5000,
+    "log_backup_count": 1,
+    "subprocess_timeout": 10,
+    "hysteresis_degrees": 3,
+    "smoothing_window": 5,
+    "spike_threshold": 15,
+    "max_consecutive_failures": 10,
+    "profile": "balanced",
+    "curve": null,
+    "enable_tray": true,
+    "enable_notifications": false
+}
+```
+
+### Custom fan curve
+
+Set `"curve"` to a list of `[temperature, speed%]` waypoints. This overrides the profile:
+
+```json
+{
+    "curve": [[30, 10], [40, 25], [50, 50], [60, 80], [70, 100]]
+}
+```
+
+Temperatures between waypoints are linearly interpolated. Below the first point the speed is clamped to the first value; above the last point it is clamped to the last value.
+
+### Preset profiles
+
+| Profile | Behaviour |
+|---------|-----------|
+| `silent` | Fans stay very low until temperatures climb well above 50C. Prioritises noise reduction. |
+| `balanced` | Moderate ramp-up starting around 40C. Good mix of cooling and noise. |
+| `performance` | Aggressive cooling. Fans ramp up early and reach 100% around 65C. |
+
+## Auto-Start at System Startup
+
+Use the included PowerShell script to register a Windows Task Scheduler task with:
+
+- Trigger: **At system startup**
+- Logon mode: **Run whether user is logged on or not**
+- Security option: **Do not store password (S4U)**
+- Compatibility: **Windows 10** (also valid for Windows 11)
+
+Note: `Get-ScheduledTask` may report compatibility as `Win8`/`Win10` because
+the `ScheduledTasks` module uses legacy enum labels. This is normal on modern
+Windows builds when the task is configured correctly in Task Scheduler UI.
+
+```powershell
+# Install
+.\autostart.ps1 install
+
+# Uninstall
+.\autostart.ps1 uninstall
+```
+
+When started before login, no interactive desktop exists, so tray UI is unavailable.
+The controller automatically falls back to headless mode and continues controlling fans.
+
+## Running as a Windows Service (F3)
+
+For a true background service that persists across user sessions, use [NSSM (Non-Sucking Service Manager)](https://nssm.cc/):
+
+```bash
+# Install NSSM, then:
+nssm install ASUSFanControl "C:\path\to\python.exe" "C:\path\to\main.py --no-console"
+nssm start ASUSFanControl
+```
+
+## Logging
+
+Activity is logged to `fan_control.log` (rotating, bounded by `log_max_bytes`). Use `fanlog.bat` to tail the log:
+
+```bash
+fanlog.bat
+```
+
+## How It Works
+
+1. **Validate** -- on startup, confirms `AsusFanControl.exe` is present and working.
+2. **Read Temperature** -- calls `AsusFanControl.exe --get-cpu-temp` and parses the output.
+3. **Smooth** -- adds the reading to a rolling window and computes the average.
+4. **Spike Check** -- if the temperature jumped by more than `spike_threshold` degrees since the last reading, fans go to 100% immediately.
+5. **Decide Speed** -- interpolates along the active fan curve to find the target speed.
+6. **Hysteresis** -- if the new target is lower than the current setting, only decrease if the temperature has dropped by at least `hysteresis_degrees`.
+7. **Set Speed** -- calls `AsusFanControl.exe --set-fan-speeds=<N>` only when the target differs from the current setting.
+8. **Log & Sleep** -- logs the current state and sleeps for an adaptive duration.
+9. **Repeat** until stopped.
+
+## Contributing
+
+Contributions are welcome! Open an issue or submit a pull request.

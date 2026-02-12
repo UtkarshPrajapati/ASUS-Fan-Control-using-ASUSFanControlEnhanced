@@ -2,3 +2,6 @@ fan_control.log
 fan_control.log.1
 *.exe
 *.dll
+__pycache__/
+*.pyc
+.venv/

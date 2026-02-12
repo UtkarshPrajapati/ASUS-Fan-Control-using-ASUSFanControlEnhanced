@@ -1,0 +1,9 @@
+# Core: no dependencies required (stdlib only)
+# The packages below are optional and enable extra features.
+
+# System tray icon (F1) -- required for --tray mode
+pystray>=0.19.0
+Pillow>=10.0.0
+
+# Windows toast notifications (F2) -- required for --notifications mode
+winotify>=1.1.0
