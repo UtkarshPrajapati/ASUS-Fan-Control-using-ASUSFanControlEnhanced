@@ -131,6 +131,11 @@ def _create_icon_image(temp: int = 0) -> "Image.Image":
 def run_with_tray(controller: "FanController") -> None:
     """Run the fan controller with a system tray icon on the main thread."""
 
+    # In tray mode, keep console visible by default. If the process started
+    # without a console (e.g. launched hidden), allocate one and attach logs.
+    if _ensure_console_window(controller.logger):
+        _set_console_visible(True)
+
     # -- Menu callbacks ------------------------------------------------------
 
     def on_quit(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
