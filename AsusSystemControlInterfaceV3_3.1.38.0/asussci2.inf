@@ -1,0 +1,319 @@
+;======================================================================
+;
+; Copyright (c) ASUSTek Computer Inc. (2018)
+;
+; Module Name:
+;     asussci2.inf
+;
+; Abstract:
+;     INF file for installing ASUS System Control Interface v3
+;
+; Installation Notes:
+;     	
+;======================================================================
+[Version]
+Signature = "$Windows NT$"
+Class = System
+ClassGUID = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider = "ASUSTeK COMPUTER INC."
+DriverVer = 10/29/2024,3.1.38.0
+PnpLockDown = 1
+CatalogFile.ntamd64 = asussci2.cat
+
+
+[Manufacturer]
+%MfgName% = ASUP, ntamd64.10.0...16299
+
+[ASUP.ntamd64.10.0...16299]
+%DeviceDesc1% = NO_DRV64, ACPI\ASUS2018
+
+[NO_DRV64]
+Include = machine.inf
+Needs = NO_DRV
+CopyFiles = PackageCopySoftwareManager        ;Software Manager service
+CopyFiles = PackageCopySoftwareManagerLicense ;Software Manager service
+CopyFiles = PackageCopyOptimization	      	  ;Optimization service
+CopyFiles = PackageCopyDiagnosis	      	  ;System Diagnosis service
+CopyFiles = PackageCopyAnalysis               ;Analysis service
+CopyFiles = PackageCopyAnalysisLicense        ;Analysis service
+CopyFiles = PackageCopyAppService             ;App service
+CopyFiles = PackageCopySwitch                 ;Switch service
+
+[NO_DRV64.Services]
+Include = machine.inf
+Needs = NO_DRV.Services
+AddService = ATKWMIACPIIO, , Optimization_Drv_ServiceInstall							;Optimization driver
+AddService = ASUSOptimization, 0x00000800, Optimization_Srv_ServiceInstall				;Optimization service
+AddService = ASUSSystemDiagnosis, 0x00000800, SystemDiagnosisServiceInstall     		;System Diagnosis service
+AddService = ASUSSystemAnalysis, 0x00000800, Analysis_ServiceInstall		     		;Analysis service
+AddService = ASUSSoftwareManager, 0x00000800, SoftwareManager_Usersrv_ServiceInstall    ;Software Manager service
+AddService = AsusAppService, 0x00000800, AppService_ServiceInstall    					;App service
+AddService = ASUSSwitch, 0x00000800, Switch_Srv_ServiceInstall							;Switch service
+
+[DestinationDirs]
+DefaultDestDir 		    		  = 13
+PackageCopySoftwareManager        = 13,%SoftwareManagerFolder%    			;Software Manager service
+PackageCopySoftwareManagerLicense = 13,%AsusSoftwareManagerLicenseFolder%   ;Software Manager service
+PackageCopyOptimization	          = 13,%OptimizationFolder%       			;Optimization service
+PackageCopyDiagnosis 	          = 13,%SystemDiagnosisFolder%				;System Diagnosis Service
+PackageCopyAnalysis 			  = 13,%AnalysisFolder%						;Analysis service
+PackageCopyAnalysisLicense 		  = 13,%AnalysisLicenseFolder%				;Analysis service
+PackageCopyAppService             = 13,%AppServiceFolder%            		;App service
+PackageCopySwitch         		  = 13,%SwitchFolder%            			;Switch service
+
+; ==============================================================
+;                    Software Manager service
+; ==============================================================
+[PackageCopySoftwareManager]
+AsusLiveUpdate.dll
+AsusLiveUpdate.ini
+AsusSetup.exe
+AsusSetupEx.exe
+AsusSoftwareManager.exe
+AsusToolkit.exe
+AsusBusinessIntelligenceCollection.dll
+AsusBusinessIntelligenceTransfer.dll
+AsusBusinessIntelligenceCPPLib.dll
+AsusSoftwareManagerAgent.exe
+AsusAD.Common.dll
+AsusAD.Core.dll
+AsusADServiceAgent.dll
+protobuf-net.dll
+AsusUpdateChecker.exe
+Dapper.dll
+Microsoft.Data.Sqlite.dll
+SQLitePCLRaw.batteries_v2.dll
+SQLitePCLRaw.core.dll
+SQLitePCLRaw.provider.e_sqlite3.dll
+SQLitePCLRaw.provider.dynamic_cdecl.dll
+e_sqlite3.dll
+System.Memory.dll
+System.Runtime.CompilerServices.Unsafe.dll
+AsusSupportService.exe
+AsusLiveUpdate_RPCClientRT.dll
+msvcp140.dll
+vcruntime140.dll
+vcruntime140_1.dll
+AsusSignCheck.dll
+bsitf.dll
+bsitf.sys
+WinFlash.exe
+
+[PackageCopySoftwareManagerLicense]
+LICENSE_libzip.txt
+LICENSE_libzippp.txt
+LICENSE_SWMGR_RapidJSON.txt
+LICENSE_Dapper.txt
+LICENSE_Newtonsoft_Json.txt
+
+[SoftwareManager_Usersrv_ServiceInstall]
+DisplayName    = "ASUS Software Manager"
+ServiceType    = 0x00000010      ; SERVICE_WIN32_SHARE_PROCESS
+StartType      = 2               ; SERVICE_DEMAND_START, SERVICE_AUTO_START ==> 2
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\%SoftwareManagerFolder%\AsusSoftwareManager.exe
+
+
+; ==============================================================
+;                    Optimization service                         
+; ==============================================================
+[PackageCopyOptimization]
+AsusHotkey.exe
+AsusOptimizationStartupTask.exe
+AsusOptimization.exe
+AsusOSD.exe
+AsusWmiAcpi.sys
+AsusSplendid.exe
+AsusSplendid.dll
+AsusTru2Life.dll
+AsusCCT.dll
+AsusColorKernel.dll
+AsusICM.dll
+ASUS Optimization 36D18D69AFC3.xml
+AsusWiFiSmartConnect.exe
+AsusWiFiRangeboost.exe
+AsusTaskFirst.exe
+
+[Optimization_Drv_ServiceInstall]
+DisplayName    = "ATKWMIACPI Driver"
+ServiceBinary  = %13%\%OptimizationFolder%\AsusWmiAcpi.sys
+ServiceType    = 1
+StartType      = 1
+ErrorControl   = 1
+
+[Optimization_Srv_ServiceInstall]
+DisplayName    = "ASUS Optimization"
+ServiceBinary  = %13%\%OptimizationFolder%\AsusOptimization.exe
+ServiceType    = 16
+StartType      = 2
+ErrorControl   = 1
+LoadOrderGroup = ShellSvcGroup
+
+[PackageCopyDiagnosis]
+AsusSystemDiagnosis.exe
+
+[SystemDiagnosisServiceInstall]
+DisplayName    = "ASUS System Diagnosis"
+ServiceType    = 0x00000010      ; SERVICE_WIN32_SHARE_PROCESS
+StartType      = 2               ; SERVICE_DEMAND_START, SERVICE_AUTO_START ==> 2
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\%SystemDiagnosisFolder%\AsusSystemDiagnosis.exe
+
+
+; ==============================================================
+;                    Analysis service                         
+; ==============================================================
+[PackageCopyAnalysis]
+AsusSystemAnalysis.exe
+AsusWinIO64.dll
+AsusSAIO.sys
+AsusVerifyJWT.exe
+wlanCliDLL.dll
+
+[PackageCopyAnalysisLicense]
+LICENSE_nlohmann-json.txt
+
+[Analysis_ServiceInstall]
+DisplayName    = "ASUS System Analysis"
+ServiceBinary  = %13%\%AnalysisFolder%\AsusSystemAnalysis.exe
+ServiceType    = 16
+StartType      = 2
+ErrorControl   = 1
+
+; ==============================================================
+;                    App service                         
+; ==============================================================
+[PackageCopyAppService]
+AsusAppService.exe
+AsusWebFlowLib.dll
+AsusJWTDecoder.exe
+AsusVirtualKeyboardLauncher.exe
+
+[AppService_ServiceInstall]
+DisplayName    = "ASUS App Service"
+ServiceType    = 0x00000010      	; SERVICE_WIN32_SHARE_PROCESS
+StartType      = 2               	; SERVICE_DEMAND_START, SERVICE_AUTO_START ==> 2
+ErrorControl   = 1               	; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\%AppServiceFolder%\AsusAppService.exe
+
+; ==============================================================
+;                    Switch service                         
+; ==============================================================
+[PackageCopySwitch]
+AsusSwitch.exe
+AsusSwitchAgent.exe
+AsusSwitchExe.exe
+AsusSwitchHelper.exe
+AsusSwitchNet.exe
+AsusSwitchNetMDNS.exe
+
+[Switch_Srv_ServiceInstall]
+DisplayName    = "ASUS Switch"
+ServiceBinary  = %13%\%SwitchFolder%\AsusSwitch.exe
+ServiceType    = 16
+StartType      = 2
+ErrorControl   = 1
+
+[SourceDisksFiles]
+; ================== Analysis service, diskid = 3 ===========================
+AsusSystemAnalysis.exe = 3
+AsusWinIO64.dll = 3
+AsusSAIO.sys = 3
+AsusVerifyJWT.exe = 3
+wlanCliDLL.dll = 3
+LICENSE_nlohmann-json.txt = 11
+; ================== System Diagnosis service, diskid = 4 ===========================
+AsusSystemDiagnosis.exe = 4
+; ================== Optimization service, diskid = 5 ===========================
+AsusHotkey.exe = 5
+AsusOptimizationStartupTask.exe = 5
+AsusOptimization.exe = 5
+AsusOSD.exe = 5
+AsusWmiAcpi.sys = 5
+AsusSplendid.exe = 5
+AsusSplendid.dll = 5 
+AsusTru2Life.dll = 5
+AsusCCT.dll = 5
+AsusColorKernel.dll = 5
+AsusICM.dll = 5
+ASUS Optimization 36D18D69AFC3.xml = 5
+AsusWiFiSmartConnect.exe = 5
+AsusWiFiRangeboost.exe = 5
+AsusTaskFirst.exe = 5
+
+; ================== Software Manager service, diskid = 6 ===========================
+AsusLiveUpdate.dll = 6
+AsusLiveUpdate.ini = 6
+AsusSetup.exe = 6
+AsusSetupEx.exe = 6
+AsusSoftwareManager.exe = 6
+AsusToolkit.exe = 6
+AsusBusinessIntelligenceCollection.dll = 6
+AsusBusinessIntelligenceTransfer.dll = 6
+AsusBusinessIntelligenceCPPLib.dll = 6
+AsusSoftwareManagerAgent.exe = 6
+AsusAD.Common.dll = 6
+AsusAD.Core.dll = 6
+AsusADServiceAgent.dll = 6
+protobuf-net.dll = 6
+AsusUpdateChecker.exe = 6
+Dapper.dll = 6
+Microsoft.Data.Sqlite.dll = 6
+SQLitePCLRaw.batteries_v2.dll = 6
+SQLitePCLRaw.core.dll = 6
+SQLitePCLRaw.provider.e_sqlite3.dll = 6
+SQLitePCLRaw.provider.dynamic_cdecl.dll = 6
+e_sqlite3.dll = 6
+System.Memory.dll = 6
+System.Runtime.CompilerServices.Unsafe.dll = 6
+AsusSupportService.exe = 6
+AsusLiveUpdate_RPCClientRT.dll = 6
+msvcp140.dll = 6
+vcruntime140.dll = 6
+vcruntime140_1.dll = 6
+AsusSignCheck.dll = 6
+bsitf.dll = 6
+bsitf.sys = 6
+WinFlash.exe = 6
+LICENSE_libzip.txt = 10
+LICENSE_libzippp.txt = 10
+LICENSE_SWMGR_RapidJSON.txt = 10
+LICENSE_Dapper.txt = 10
+LICENSE_Newtonsoft_Json.txt = 10
+
+; ================== App service, diskid = 12 ===========================
+AsusAppService.exe = 12
+AsusWebFlowLib.dll = 12 
+AsusJWTDecoder.exe = 12
+AsusVirtualKeyboardLauncher.exe = 12
+
+; ================== Switch service, diskid = 13 ===========================
+AsusSwitch.exe = 13
+AsusSwitchAgent.exe = 13
+AsusSwitchExe.exe = 13
+AsusSwitchHelper.exe = 13
+AsusSwitchNet.exe = 13
+AsusSwitchNetMDNS.exe = 13
+
+[SourceDisksNames]
+1  = %MfgName%,,,
+3  = %MfgName%,,,\%AnalysisFolder%						;Analysis service, diskid = 3
+4  = %MfgName%,,,\%SystemDiagnosisFolder%				;System Diagnosis Service, diskid = 4
+5  = %MfgName%,,,\%OptimizationFolder%					;Optimization service, diskid = 5
+6  = %MfgName%,,,\%SoftwareManagerFolder%               ;Software Manager service, diskid = 6
+10 = %MfgName%,,,\%AsusSoftwareManagerLicenseFolder%	;AsusSoftwareManager license, diskid = 10
+11 = %MfgName%,,,\%AnalysisLicenseFolder%				;Analysis service License, diskid = 11
+12 = %MfgName%,,,\%AppServiceFolder%					;Analysis service License, diskid = 12
+13 = %MfgName%,,,\%SwitchFolder%                       	;Switch service, diskid = 13
+
+[Strings]
+MfgName								= "ASUS"
+DeviceDesc1    						= "ASUS System Control Interface v3"
+SoftwareManagerFolder   			= "ASUSSoftwareManager"
+OptimizationFolder					= "ASUSOptimization"
+SystemDiagnosisFolder   			= "ASUSSystemDiagnosis"
+AnalysisFolder						= "ASUSSystemAnalysis"
+AnalysisLicenseFolder				= "ASUSSystemAnalysisLicense"
+AsusSoftwareManagerLicenseFolder 	= "AsusSoftwareManagerLicense"
+AppServiceFolder    				= "AsusAppService"
+SwitchFolder    					= "ASUSSwitch"
