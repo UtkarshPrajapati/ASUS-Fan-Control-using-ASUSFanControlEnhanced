@@ -110,7 +110,13 @@ def _get_work_area_bounds() -> Optional[tuple[int, int, int, int]]:
     return (rect.left, rect.top, rect.right, rect.bottom)
 
 
-def _compute_dashboard_position(root: "tk.Tk", width: int, height: int) -> tuple[int, int]:
+def _compute_dashboard_position(
+    root: "tk.Tk",
+    width: int,
+    height: int,
+    margin: int = 14,
+    bottom_safe_margin: int = 56,
+) -> tuple[int, int]:
     """Compute a reliable bottom-right position in Tk coordinate space."""
     screen_w = int(root.winfo_screenwidth())
     screen_h = int(root.winfo_screenheight())
@@ -144,13 +150,27 @@ def _compute_dashboard_position(root: "tk.Tk", width: int, height: int) -> tuple
             if right <= left or bottom <= top:
                 left, top, right, bottom = 0, 0, screen_w, screen_h
 
-    margin = 14
-    # Extra lift so the window never tucks under taskbar auto-hide edges
-    # or shell overlays on some DPI/taskbar setups.
-    bottom_safe_margin = 56
     pos_x = max(left + margin, right - width - margin)
     pos_y = max(top + margin, bottom - height - margin - bottom_safe_margin)
     return pos_x, pos_y
+
+
+def _config_int(config: dict, key: str, default: int, min_value: int = 0) -> int:
+    """Return integer config value with fallback and minimum clamp."""
+    try:
+        value = int(config.get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(min_value, value)
+
+
+def _config_float(config: dict, key: str, default: float, min_value: float = 0.0) -> float:
+    """Return float config value with fallback and minimum clamp."""
+    try:
+        value = float(config.get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(min_value, value)
 
 
 def _has_tray_console_handler(logger: logging.Logger) -> bool:
@@ -282,11 +302,20 @@ class DashboardWindow:
         self._set_open(True)
         root: Optional["tk.Tk"] = None
         try:
+            cfg = self.controller.config
+            dashboard_width = _config_int(cfg, "dashboard_width", 520, min_value=320)
+            dashboard_height = _config_int(cfg, "dashboard_height", 360, min_value=240)
+            dashboard_min_width = _config_int(cfg, "dashboard_min_width", 460, min_value=320)
+            dashboard_min_height = _config_int(cfg, "dashboard_min_height", 320, min_value=240)
+            dashboard_margin = _config_int(cfg, "dashboard_margin", 14, min_value=0)
+            dashboard_bottom_offset = _config_int(cfg, "dashboard_bottom_offset", 56, min_value=0)
+            dashboard_refresh_ms = _config_int(cfg, "dashboard_refresh_interval_ms", 1000, min_value=200)
+
             root = tk.Tk()
             root.withdraw()
             root.title("ASUS Fan Control Dashboard")
-            root.geometry("520x360")
-            root.minsize(460, 320)
+            root.geometry(f"{dashboard_width}x{dashboard_height}")
+            root.minsize(dashboard_min_width, dashboard_min_height)
             root.configure(bg="#111827")
 
             container = tk.Frame(root, bg="#111827", padx=14, pady=14)
@@ -418,7 +447,7 @@ class DashboardWindow:
                 textvariable=status_var,
                 bg="#111827",
                 fg="#E5E7EB",
-                wraplength=490,
+                wraplength=max(280, dashboard_width - 30),
                 justify="left",
                 font=("Segoe UI", 10),
             ).pack(anchor="w", pady=(10, 2))
@@ -432,9 +461,15 @@ class DashboardWindow:
 
             # Place near tray area (bottom-right) and bring to front.
             root.update_idletasks()
-            width = max(int(root.winfo_width()), int(root.winfo_reqwidth()), 520)
-            height = max(int(root.winfo_height()), int(root.winfo_reqheight()), 360)
-            pos_x, pos_y = _compute_dashboard_position(root, width, height)
+            width = max(int(root.winfo_width()), int(root.winfo_reqwidth()), dashboard_width)
+            height = max(int(root.winfo_height()), int(root.winfo_reqheight()), dashboard_height)
+            pos_x, pos_y = _compute_dashboard_position(
+                root,
+                width,
+                height,
+                margin=dashboard_margin,
+                bottom_safe_margin=dashboard_bottom_offset,
+            )
             root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
             root.deiconify()
             root.lift()
@@ -489,7 +524,7 @@ class DashboardWindow:
                     min(100, display_target if isinstance(display_target, int) else 0),
                 )
 
-                root.after(1000, refresh_ui)
+                root.after(dashboard_refresh_ms, refresh_ui)
 
             def on_close() -> None:
                 self._close_requested = True
@@ -607,6 +642,12 @@ def run_with_tray(controller: "FanController") -> None:
 
     def icon_updater() -> None:
         """Periodically update the tray icon image and tooltip."""
+        update_interval = _config_float(
+            controller.config,
+            "tray_icon_update_interval_seconds",
+            2.0,
+            min_value=0.5,
+        )
         while controller.running:
             snapshot = controller.get_status_snapshot()
             raw_temp = snapshot.get("raw_temp")
@@ -621,7 +662,7 @@ def run_with_tray(controller: "FanController") -> None:
             profile = str(snapshot.get("profile", "?")).capitalize()
             icon.icon = _create_icon_image(temp)
             icon.title = f"CPU: {temp}\u00b0C | Fan: {speed}% | {profile}"
-            time.sleep(2)
+            time.sleep(update_interval)
 
     # -- Graceful Ctrl+C handling --------------------------------------------
 

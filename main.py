@@ -24,6 +24,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "high_temp": 60,
     "min_speed": 10,
     "max_speed": 100,
+    "log_file": "fan_control.log",
     "log_max_bytes": 5000,
     "log_backup_count": 1,
     "subprocess_timeout": 10,
@@ -31,6 +32,20 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "smoothing_window": 5,
     "spike_threshold": 15,
     "max_consecutive_failures": 10,
+    "driver_check_interval_seconds": 60,
+    "adaptive_sleep_error_seconds": 3,
+    "adaptive_sleep_cool_seconds": 10,
+    "adaptive_sleep_warm_seconds": 5,
+    "adaptive_sleep_hot_seconds": 3,
+    "adaptive_sleep_cool_margin": 10,
+    "tray_icon_update_interval_seconds": 2,
+    "dashboard_refresh_interval_ms": 1000,
+    "dashboard_width": 520,
+    "dashboard_height": 360,
+    "dashboard_min_width": 460,
+    "dashboard_min_height": 320,
+    "dashboard_margin": 14,
+    "dashboard_bottom_offset": 56,
     "profile": "balanced",
     "curve": None,
     "enable_tray": True,
@@ -55,6 +70,7 @@ PROFILES: Dict[str, List[Tuple[int, int]]] = {
 # AsusFanControl.exe CLI (temperature reads return 0).
 COMPATIBLE_DRIVER_VERSION: Tuple[int, ...] = (3, 1, 38, 0)
 DRIVER_DEVICE_ID_PATTERN = "*ASUS2018*"
+_UNSET = object()
 
 
 def _parse_version(version_str: str) -> Tuple[int, ...]:
@@ -342,19 +358,23 @@ class FanController:
     def _update_runtime_state(
         self,
         *,
-        raw_temp: Optional[int] = None,
-        smoothed_temp: Optional[int] = None,
-        fan_speeds: Optional[str] = None,
-        target_speed: Optional[int] = None,
-        status_message: Optional[str] = None,
+        raw_temp: Any = _UNSET,
+        smoothed_temp: Any = _UNSET,
+        fan_speeds: Any = _UNSET,
+        target_speed: Any = _UNSET,
+        status_message: Any = _UNSET,
     ) -> None:
         """Update cached runtime fields for tray/dashboard UI."""
         with self._state_lock:
-            self.last_raw_temp = raw_temp
-            self.last_smoothed_temp = smoothed_temp
-            self.last_reported_fan_speeds = fan_speeds
-            self.last_target_fan_speed = target_speed
-            if status_message:
+            if raw_temp is not _UNSET:
+                self.last_raw_temp = raw_temp
+            if smoothed_temp is not _UNSET:
+                self.last_smoothed_temp = smoothed_temp
+            if fan_speeds is not _UNSET:
+                self.last_reported_fan_speeds = fan_speeds
+            if target_speed is not _UNSET:
+                self.last_target_fan_speed = target_speed
+            if status_message is not _UNSET and status_message:
                 self.last_status_message = status_message
             self.last_updated_ts = time.time()
 
@@ -410,10 +430,8 @@ class FanController:
                 self.logger.warning(
                     "AsusFanControl.exe returned temperature 0 -- possible driver issue."
                 )
-                self._check_driver_if_needed()
-            else:
-                # Still check driver version proactively on startup
-                self._check_driver_if_needed()
+            # Always check driver version proactively on startup.
+            self._check_driver_if_needed()
 
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
@@ -457,7 +475,8 @@ class FanController:
         Sets ``self._driver_incompatible`` and logs an actionable warning.
         """
         now = time.time()
-        if now - self._last_driver_check < 60:
+        check_interval = self.config.get("driver_check_interval_seconds", 60)
+        if now - self._last_driver_check < check_interval:
             return  # Already checked recently
         self._last_driver_check = now
 
@@ -617,14 +636,19 @@ class FanController:
     def adaptive_sleep(self, temp: Optional[int]) -> int:
         """Return sleep duration in seconds based on current CPU temperature."""
         high = self.config.get("high_temp", 60)
+        cool_margin = self.config.get("adaptive_sleep_cool_margin", 10)
+        error_sleep = self.config.get("adaptive_sleep_error_seconds", 3)
+        cool_sleep = self.config.get("adaptive_sleep_cool_seconds", 10)
+        warm_sleep = self.config.get("adaptive_sleep_warm_seconds", 5)
+        hot_sleep = self.config.get("adaptive_sleep_hot_seconds", 3)
         if temp is None or temp <= 0:
-            return 3   # Short sleep on error
-        elif temp < high - 10:
-            return 10  # Cool: long sleep
+            return error_sleep  # Short sleep on error
+        elif temp < high - cool_margin:
+            return cool_sleep  # Cool: long sleep
         elif temp < high:
-            return 5   # Warm: medium sleep
+            return warm_sleep  # Warm: medium sleep
         else:
-            return 3   # Hot: short sleep
+            return hot_sleep  # Hot: short sleep
 
     # -- Main control loop ---------------------------------------------------
 
@@ -830,6 +854,7 @@ def main() -> None:
 
     # Set up logger (C4: named logger, C5: console output)
     logger = setup_logger(
+        log_file=config.get("log_file", "fan_control.log"),
         max_bytes=config.get("log_max_bytes", 5000),
         backup_count=config.get("log_backup_count", 1),
         console_output=console_output,

@@ -1,38 +1,24 @@
-2026-02-13 16:43:14,504 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:43:15,264 - INFO - CPU Temp: 40C, Fan Speed: 2585 2579 RPM (Target: 35%)
-2026-02-13 16:43:25,353 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:43:25,792 - INFO - CPU Temp: 39C, Fan Speed: 2588 2579 RPM (Target: 35%)
-2026-02-13 16:43:35,956 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:43:36,514 - INFO - CPU Temp: 39C, Fan Speed: 2588 2582 RPM (Target: 35%)
-2026-02-13 16:43:46,685 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:43:47,319 - INFO - CPU Temp: 38C, Fan Speed: 2585 2579 RPM (Target: 35%)
-2026-02-13 16:43:57,520 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:43:58,361 - INFO - CPU Temp: 39C, Fan Speed: 2588 2579 RPM (Target: 35%)
-2026-02-13 16:44:08,476 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:44:09,159 - INFO - CPU Temp: 38C, Fan Speed: 2585 2588 RPM (Target: 35%)
-2026-02-13 16:44:19,325 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:44:20,064 - INFO - CPU Temp: 38C, Fan Speed: 2582 2579 RPM (Target: 35%)
-2026-02-13 16:44:30,182 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:44:30,885 - INFO - CPU Temp: 38C, Fan Speed: 2591 2582 RPM (Target: 35%)
-2026-02-13 16:44:41,054 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:44:41,840 - INFO - CPU Temp: 37C, Fan Speed: 2588 2582 RPM (Target: 35%)
-2026-02-13 16:44:52,017 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:44:52,528 - INFO - CPU Temp: 37C, Fan Speed: 2588 2582 RPM (Target: 35%)
-2026-02-13 16:45:02,680 - INFO - Fan speed already at 35%, no change needed.
-2026-02-13 16:45:03,208 - INFO - CPU Temp: 42C, Fan Speed: 2582 2582 RPM (Target: 35%)
-2026-02-13 16:45:14,238 - INFO - New fan speeds: 24%
-2026-02-13 16:45:14,997 - INFO - CPU Temp: 40C, Fan Speed: 1904 1926 RPM (Target: 24%)
-2026-02-13 16:45:25,161 - INFO - Fan speed already at 24%, no change needed.
-2026-02-13 16:45:25,895 - INFO - CPU Temp: 38C, Fan Speed: 1828 1796 RPM (Target: 24%)
-2026-02-13 16:45:33,166 - INFO - Configuration loaded (curve source: balanced)
-2026-02-13 16:45:33,335 - INFO - AsusFanControl.exe validated successfully.
-2026-02-13 16:45:36,966 - INFO - ASUS driver version 3.1.38.0 is compatible.
-2026-02-13 16:45:37,066 - INFO - Fan control loop started.
-2026-02-13 16:45:37,925 - INFO - New fan speeds: 30%
-2026-02-13 16:45:38,712 - INFO - CPU Temp: 42C, Fan Speed: 2216 2180 RPM (Target: 30%)
-2026-02-13 16:45:48,879 - INFO - Fan speed already at 30%, no change needed.
-2026-02-13 16:45:49,722 - INFO - CPU Temp: 38C, Fan Speed: 2264 2236 RPM (Target: 30%)
-2026-02-13 16:45:59,899 - INFO - Fan speed already at 30%, no change needed.
-2026-02-13 16:46:00,578 - INFO - CPU Temp: 38C, Fan Speed: 2260 2236 RPM (Target: 30%)
-2026-02-13 16:46:10,747 - INFO - Fan speed already at 30%, no change needed.
-2026-02-13 16:46:11,553 - INFO - CPU Temp: 38C, Fan Speed: 2260 2236 RPM (Target: 30%)
+2026-02-13 16:59:20,115 - INFO - Fan speed already at 25%, no change needed.
+2026-02-13 16:59:20,894 - INFO - CPU Temp: 37C, Fan Speed: 1901 1854 RPM (Target: 25%)
+2026-02-13 16:59:31,055 - INFO - Fan speed already at 25%, no change needed.
+2026-02-13 16:59:31,849 - INFO - CPU Temp: 37C, Fan Speed: 1903 1860 RPM (Target: 25%)
+2026-02-13 16:59:41,974 - INFO - Fan speed already at 25%, no change needed.
+2026-02-13 16:59:42,321 - INFO - CPU Temp: 37C, Fan Speed: 1901 1855 RPM (Target: 25%)
+2026-02-13 16:59:52,490 - INFO - Fan speed already at 25%, no change needed.
+2026-02-13 16:59:52,850 - INFO - CPU Temp: 37C, Fan Speed: 1903 1855 RPM (Target: 25%)
+2026-02-13 17:00:12,444 - INFO - Configuration loaded (curve source: balanced)
+2026-02-13 17:00:12,619 - INFO - AsusFanControl.exe validated successfully.
+2026-02-13 17:00:15,990 - INFO - ASUS driver version 3.1.38.0 is compatible.
+2026-02-13 17:00:15,990 - INFO - Fan control loop started.
+2026-02-13 17:00:17,085 - INFO - New fan speeds: 25%
+2026-02-13 17:00:17,923 - INFO - CPU Temp: 40C, Fan Speed: 1904 1855 RPM (Target: 25%)
+2026-02-13 17:00:19,164 - INFO - Configuration loaded (curve source: balanced)
+2026-02-13 17:00:19,333 - INFO - AsusFanControl.exe validated successfully.
+2026-02-13 17:00:22,039 - INFO - ASUS driver version 3.1.38.0 is compatible.
+2026-02-13 17:00:22,107 - INFO - Fan control loop started.
+2026-02-13 17:00:23,218 - INFO - New fan speeds: 28%
+2026-02-13 17:00:24,046 - INFO - CPU Temp: 41C, Fan Speed: 2093 2055 RPM (Target: 28%)
+2026-02-13 17:00:34,251 - INFO - Fan speed already at 28%, no change needed.
+2026-02-13 17:00:35,118 - INFO - CPU Temp: 40C, Fan Speed: 2107 2079 RPM (Target: 28%)
+2026-02-13 17:00:45,291 - INFO - Fan speed already at 28%, no change needed.
+2026-02-13 17:00:46,130 - INFO - CPU Temp: 38C, Fan Speed: 2109 2081 RPM (Target: 28%)

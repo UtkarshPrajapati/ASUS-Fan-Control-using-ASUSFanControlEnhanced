@@ -146,6 +146,7 @@ switch ($Action) {
         Write-Host "  Trigger: At system startup" -ForegroundColor Green
         Write-Host "  Mode: Run whether user is logged on or not (Do not store password / S4U)" -ForegroundColor Green
         Write-Host "  Purpose: Background thermal safety (no tray)" -ForegroundColor Green
+        Write-Host "  Compatibility: Win8 enum (used by Task Scheduler on Win10/11)" -ForegroundColor Green
 
         if ($trayRegistered) {
             Write-Host "Task '$TrayTaskName' registered." -ForegroundColor Green
