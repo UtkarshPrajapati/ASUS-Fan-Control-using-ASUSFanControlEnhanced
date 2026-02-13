@@ -19,12 +19,16 @@ from typing import Any, Dict, List, Optional, Tuple
 # Default configuration & preset profiles
 # ---------------------------------------------------------------------------
 
+APP_DIR = Path(__file__).resolve().parent
+
 DEFAULT_CONFIG: Dict[str, Any] = {
+    "runtime_dir": "runtime",
+    "tool_executable": "runtime/bin/AsusFanControl.exe",
     "low_temp": 20,
     "high_temp": 60,
     "min_speed": 10,
     "max_speed": 100,
-    "log_file": "fan_control.log",
+    "log_file": "runtime/logs/fan_control.log",
     "log_max_bytes": 5000,
     "log_backup_count": 1,
     "subprocess_timeout": 10,
@@ -81,6 +85,36 @@ def _parse_version(version_str: str) -> Tuple[int, ...]:
         return (0,)
 
 
+def _resolve_app_path(path_value: str) -> Path:
+    """Resolve path relative to app directory when not absolute."""
+    path_obj = Path(path_value)
+    if path_obj.is_absolute():
+        return path_obj
+    return APP_DIR / path_obj
+
+
+def _prepare_runtime_paths(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve and create runtime-related paths from config values."""
+    runtime_dir = _resolve_app_path(str(config.get("runtime_dir", "runtime")))
+    runtime_bin_dir = runtime_dir / "bin"
+    runtime_logs_dir = runtime_dir / "logs"
+
+    configured_log_file = str(config.get("log_file", DEFAULT_CONFIG["log_file"]))
+    configured_tool_executable = str(config.get("tool_executable", DEFAULT_CONFIG["tool_executable"]))
+
+    log_file_path = _resolve_app_path(configured_log_file)
+    tool_executable_path = _resolve_app_path(configured_tool_executable)
+
+    runtime_bin_dir.mkdir(parents=True, exist_ok=True)
+    runtime_logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config["runtime_dir"] = str(runtime_dir)
+    config["log_file"] = str(log_file_path)
+    config["tool_executable"] = str(tool_executable_path)
+    return config
+
+
 # ---------------------------------------------------------------------------
 # Configuration helpers
 # ---------------------------------------------------------------------------
@@ -92,15 +126,15 @@ def load_config(config_path: str = "config.json") -> Dict[str, Any]:
     Priority: config file values override DEFAULT_CONFIG values.
     """
     config = DEFAULT_CONFIG.copy()
-    path = Path(config_path)
+    path = _resolve_app_path(config_path)
     if path.exists():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
             config.update(user_config)
         except (json.JSONDecodeError, OSError) as e:
-            print(f"Warning: could not load config from {config_path}: {e}. Using defaults.")
-    return config
+            print(f"Warning: could not load config from {path}: {e}. Using defaults.")
+    return _prepare_runtime_paths(config)
 
 
 def _is_interactive_user_session() -> bool:
@@ -237,7 +271,7 @@ class SafeRotatingFileHandler(RotatingFileHandler):
 
 
 def setup_logger(
-    log_file: str = "fan_control.log",
+    log_file: str = "runtime/logs/fan_control.log",
     max_bytes: int = 5000,
     backup_count: int = 1,
     console_output: bool = True,
@@ -265,6 +299,19 @@ def setup_logger(
         logger.addHandler(console_handler)
 
     return logger
+
+
+def validate_config(config: Dict[str, Any], logger: logging.Logger) -> None:
+    """Log non-fatal config validation warnings."""
+    unknown_keys = sorted(set(config.keys()) - set(DEFAULT_CONFIG.keys()))
+    if unknown_keys:
+        logger.warning(f"Unknown config keys ignored: {', '.join(unknown_keys)}")
+
+    if config.get("high_temp", 60) <= config.get("low_temp", 20):
+        logger.warning("Invalid temp thresholds: high_temp should be greater than low_temp.")
+
+    if config.get("max_speed", 100) < config.get("min_speed", 10):
+        logger.warning("Invalid speed thresholds: max_speed should be >= min_speed.")
 
 
 def send_notification(title: str, message: str) -> None:
@@ -316,6 +363,11 @@ class FanController:
         self.last_target_fan_speed: Optional[int] = None
         self.last_status_message: str = "Initializing..."
         self.last_updated_ts: float = time.time()
+
+        self._configured_executable_path = Path(
+            str(self.config.get("tool_executable", DEFAULT_CONFIG["tool_executable"]))
+        )
+        self.executable_invocation = self._resolve_executable_invocation()
 
         # Resolve the active fan curve
         self._fan_curve: List[Tuple[int, int]] = self._resolve_fan_curve()
@@ -395,25 +447,42 @@ class FanController:
                 "updated_ts": self.last_updated_ts,
             }
 
+    def _resolve_executable_invocation(self) -> str:
+        """Resolve which executable path should be used for subprocess calls."""
+        if self._configured_executable_path.exists():
+            return str(self._configured_executable_path)
+
+        path_fallback = shutil.which("AsusFanControl.exe")
+        if path_fallback:
+            self.logger.warning(
+                f"Configured executable not found at '{self._configured_executable_path}'. "
+                "Falling back to PATH lookup."
+            )
+            return path_fallback
+
+        return str(self._configured_executable_path)
+
+    def _build_exe_command(self, *args: str) -> List[str]:
+        """Build command list for AsusFanControl executable."""
+        return [self.executable_invocation, *args]
+
     # -- Startup validation --------------------------------------------------
 
     def validate_exe(self) -> bool:
         """Check that AsusFanControl.exe exists and responds (B1)."""
-        exe_path = shutil.which("AsusFanControl.exe")
-        if exe_path is None:
-            local_exe = Path("AsusFanControl.exe")
-            if not local_exe.exists():
-                msg = (
-                    "AsusFanControl.exe not found in PATH or current directory. "
-                    "Please install it before running this script."
-                )
-                self.logger.error(msg)
-                send_notification("Startup Error", msg)
-                return False
+        invocation_path = Path(self.executable_invocation)
+        if invocation_path.is_absolute() and not invocation_path.exists():
+            msg = (
+                f"AsusFanControl executable not found at '{invocation_path}'. "
+                "Set 'tool_executable' in config.json or install it on PATH."
+            )
+            self.logger.error(msg)
+            send_notification("Startup Error", msg)
+            return False
 
         try:
             result = subprocess.run(
-                ["AsusFanControl.exe", "--get-cpu-temp"],
+                self._build_exe_command("--get-cpu-temp"),
                 capture_output=True, text=True, check=True,
                 timeout=self.config.get("subprocess_timeout", 10),
             )
@@ -516,26 +585,30 @@ class FanController:
     def _run_command(self, args: List[str]) -> Optional[str]:
         """Run a subprocess command with timeout and unified error handling (A3, C2)."""
         timeout = self.config.get("subprocess_timeout", 10)
+        cmd = self._build_exe_command(*args)
         try:
             result = subprocess.run(
-                args,
+                cmd,
                 capture_output=True, text=True, check=True,
                 timeout=timeout,
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Command failed [{' '.join(args)}]: {e}")
+            self.logger.error(f"Command failed [{' '.join(cmd)}]: {e}")
         except subprocess.TimeoutExpired:
-            self.logger.error(f"Command timed out after {timeout}s: {' '.join(args)}")
+            self.logger.error(f"Command timed out after {timeout}s: {' '.join(cmd)}")
         except FileNotFoundError:
-            self.logger.error("AsusFanControl.exe not found. Ensure it is in the system PATH.")
+            self.logger.error(
+                f"AsusFanControl executable not found: '{self.executable_invocation}'. "
+                "Set 'tool_executable' in config.json or install it on PATH."
+            )
         return None
 
     # -- Temperature & fan speed I/O -----------------------------------------
 
     def get_cpu_temp(self) -> Optional[int]:
         """Get the current CPU temperature (C3: type-hinted)."""
-        output = self._run_command(["AsusFanControl.exe", "--get-cpu-temp"])
+        output = self._run_command(["--get-cpu-temp"])
         if output is None:
             return None
         try:
@@ -547,7 +620,7 @@ class FanController:
 
     def get_current_fan_speeds(self) -> Optional[str]:
         """Get the current fan speeds reported by the hardware."""
-        output = self._run_command(["AsusFanControl.exe", "--get-fan-speeds"])
+        output = self._run_command(["--get-fan-speeds"])
         if output is None:
             return None
         try:
@@ -563,7 +636,7 @@ class FanController:
             return True
 
         output = self._run_command(
-            ["AsusFanControl.exe", f"--set-fan-speeds={percentage}"]
+            [f"--set-fan-speeds={percentage}"]
         )
         if output is not None:
             self.logger.info(output)
@@ -785,12 +858,13 @@ class FanController:
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments. CLI values override config file values."""
+    default_config_path = str(APP_DIR / "config.json")
     parser = argparse.ArgumentParser(
         description="ASUSFanControlEnhanced - Dynamic fan control for ASUS laptops.",
     )
     parser.add_argument(
-        "--config", type=str, default="config.json",
-        help="Path to configuration JSON file (default: config.json)",
+        "--config", type=str, default=default_config_path,
+        help=f"Path to configuration JSON file (default: {default_config_path})",
     )
     parser.add_argument(
         "--profile", type=str, choices=list(PROFILES.keys()),
@@ -859,6 +933,7 @@ def main() -> None:
         backup_count=config.get("log_backup_count", 1),
         console_output=console_output,
     )
+    validate_config(config, logger)
 
     curve_source = "custom" if config.get("curve") else config.get("profile", "balanced")
     logger.info(f"Configuration loaded (curve source: {curve_source})")

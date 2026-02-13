@@ -18,14 +18,14 @@ A Python script to dynamically control ASUS laptop fan speeds based on CPU tempe
 - **Temperature-Coloured Console Logs** -- terminal lines use a green->yellow->red gradient based on CPU temperature.
 - **Windows Toast Notifications** (optional) -- alerts on critical events like overheating or repeated failures.
 - **Driver Compatibility Detection** -- detects incompatible ASUS System Control Interface driver updates and logs rollback guidance.
-- **Rotating Log** -- logs to `fan_control.log` with automatic rotation to keep file size bounded.
+- **Rotating Log** -- logs to `runtime/logs/fan_control.log` with automatic rotation to keep file size bounded.
 - **Console Output** -- live status output in the terminal alongside the log file.
 - **Auto-Start at System Startup** -- PowerShell script to register a Task Scheduler startup task.
 
 ## Prerequisites
 
 1. **Python 3.8+** installed and on PATH.
-2. **`AsusFanControl.exe`** -- place this utility in your system PATH or in the same directory as `main.py`. It is typically bundled with ASUS fan control software.
+2. **`AsusFanControl.exe`** -- place this utility in `runtime/bin/AsusFanControl.exe` (recommended). PATH fallback still works if the configured path is missing.
 
 ### Optional dependencies
 
@@ -47,7 +47,7 @@ git clone https://github.com/UtkarshPrajapati/ASUS-Fan-Control-using-ASUSFanCont
 cd ASUS-Fan-Control-using-ASUSFanControlEnhanced
 ```
 
-Ensure `AsusFanControl.exe` is accessible (same directory or on PATH).
+Place `AsusFanControl.exe` at `runtime/bin/AsusFanControl.exe` (default configured location).
 
 ## Usage
 
@@ -95,7 +95,7 @@ python main.py --skip-validation
 ### All CLI options
 
 ```
---config PATH       Path to config JSON file (default: config.json)
+--config PATH       Path to config JSON file (default: <app_dir>/config.json)
 --profile NAME      Fan curve profile: silent, balanced, performance
 --low-temp N        Low temperature threshold (C)
 --high-temp N       High temperature threshold (C)
@@ -117,11 +117,13 @@ if `config.json` is missing, incomplete, or invalid JSON.
 
 ```json
 {
+    "runtime_dir": "runtime",
+    "tool_executable": "runtime/bin/AsusFanControl.exe",
     "low_temp": 20,
     "high_temp": 60,
     "min_speed": 10,
     "max_speed": 100,
-    "log_file": "fan_control.log",
+    "log_file": "runtime/logs/fan_control.log",
     "log_max_bytes": 5000,
     "log_backup_count": 1,
     "subprocess_timeout": 10,
@@ -150,6 +152,13 @@ if `config.json` is missing, incomplete, or invalid JSON.
 }
 ```
 
+### Runtime folders
+
+- `runtime/bin/` -- expected location for `AsusFanControl.exe`
+- `runtime/logs/` -- rotating log output location
+
+These folders are created automatically at startup if missing.
+
 ### Custom fan curve
 
 Set `"curve"` to a list of `[temperature, speed%]` waypoints. This overrides the profile:
@@ -172,12 +181,17 @@ Temperatures between waypoints are linearly interpolated. Below the first point 
 
 ## Auto-Start at System Startup
 
-Use the included PowerShell script to register a Windows Task Scheduler task with:
+Use the included PowerShell script to register **two** Windows Task Scheduler tasks:
 
-- Trigger: **At system startup**
-- Logon mode: **Run whether user is logged on or not**
-- Security option: **Do not store password (S4U)**
-- Compatibility: **Windows 10** (also valid for Windows 11)
+- `ASUSFanControlEnhanced` (core)
+  - Trigger: **At system startup**
+  - Logon mode: **Run whether user is logged on or not**
+  - Security option: **Do not store password (S4U)**
+  - Purpose: headless thermal safety before login
+- `ASUSFanControlEnhancedTray` (UI)
+  - Trigger: **At user logon**
+  - Logon mode: **Interactive**
+  - Purpose: tray icon and dashboard in desktop session
 
 Note: `Get-ScheduledTask` may report compatibility as `Win8`/`Win10` because
 the `ScheduledTasks` module uses legacy enum labels. This is normal on modern
@@ -206,7 +220,7 @@ nssm start ASUSFanControl
 
 ## Logging
 
-Activity is logged to `fan_control.log` (rotating, bounded by `log_max_bytes`). Use `fanlog.bat` to tail the log:
+Activity is logged to `runtime/logs/fan_control.log` (rotating, bounded by `log_max_bytes`). Use `fanlog.bat` to tail the log:
 
 ```bash
 fanlog.bat

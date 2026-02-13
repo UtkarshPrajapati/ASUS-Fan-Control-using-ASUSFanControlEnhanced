@@ -1,5 +1,7 @@
 fan_control.log
 fan_control.log.1
+runtime/logs/*
+!runtime/logs/.gitkeep
 *.exe
 *.dll
 __pycache__/

@@ -1,9 +1,11 @@
 {
+    "runtime_dir": "runtime",
+    "tool_executable": "runtime/bin/AsusFanControl.exe",
     "low_temp": 20,
     "high_temp": 60,
     "min_speed": 10,
     "max_speed": 100,
-    "log_file": "fan_control.log",
+    "log_file": "runtime/logs/fan_control.log",
     "log_max_bytes": 5000,
     "log_backup_count": 1,
     "subprocess_timeout": 10,

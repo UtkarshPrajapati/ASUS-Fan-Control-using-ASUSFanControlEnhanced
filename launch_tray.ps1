@@ -3,6 +3,8 @@ param(
     [string]$PythonExe,
     [Parameter(Mandatory=$true)]
     [string]$MainScript,
+    [Parameter(Mandatory=$true)]
+    [string]$ConfigPath,
     [Parameter(Mandatory=$false)]
     [string]$CoreTaskName = "ASUSFanControlEnhanced"
 )
@@ -16,5 +18,5 @@ try {
 
 Start-Sleep -Milliseconds 500
 
-& $PythonExe $MainScript --tray
+& $PythonExe $MainScript --config $ConfigPath --tray
 exit $LASTEXITCODE

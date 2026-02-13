@@ -53,8 +53,13 @@ if ((-not $PythonExe) -or (-not (Test-Path $PythonExe)) -or ($PythonExe -like "*
 switch ($Action) {
     "install" {
         $MainScript = Join-Path $ScriptDir "main.py"
+        $ConfigPath = Join-Path $ScriptDir "config.json"
         if (-not (Test-Path $MainScript)) {
             Write-Error "main.py not found at $MainScript"
+            exit 1
+        }
+        if (-not (Test-Path $ConfigPath)) {
+            Write-Error "config.json not found at $ConfigPath"
             exit 1
         }
         if (-not (Test-Path $TrayLauncher)) {
@@ -68,7 +73,7 @@ switch ($Action) {
         # Core/background task (runs pre-login for thermal safety)
         $TaskAction = New-ScheduledTaskAction `
             -Execute $PythonExe `
-            -Argument "`"$MainScript`" --no-console --no-tray" `
+            -Argument "`"$MainScript`" --config `"$ConfigPath`" --no-console --no-tray" `
             -WorkingDirectory $ScriptDir
 
         # Requirement 1: run at system startup (not logon)
@@ -110,7 +115,7 @@ switch ($Action) {
         # It stops the startup task first to avoid duplicate controller loops.
         $TrayAction = New-ScheduledTaskAction `
             -Execute "powershell.exe" `
-            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$TrayLauncher`" -PythonExe `"$PythonExe`" -MainScript `"$MainScript`" -CoreTaskName `"$TaskName`"" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$TrayLauncher`" -PythonExe `"$PythonExe`" -MainScript `"$MainScript`" -ConfigPath `"$ConfigPath`" -CoreTaskName `"$TaskName`"" `
             -WorkingDirectory $ScriptDir
 
         $TrayTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
