@@ -70,6 +70,55 @@ def _set_console_visible(visible: bool) -> None:
         pass
 
 
+def _disable_console_close_button() -> None:
+    """Grey-out the console window's X button so it cannot kill the process.
+
+    Removing SC_CLOSE from the system menu disables the close button and
+    the "Close" entry in the title-bar context menu.  The user should use
+    the tray icon's "Hide Console" / "Quit" options instead.
+    """
+    hwnd = _get_console_window()
+    if not hwnd:
+        return
+    try:
+        SC_CLOSE = 0xF060
+        MF_BYCOMMAND = 0x00000000
+        hmenu = ctypes.windll.user32.GetSystemMenu(hwnd, False)
+        if hmenu:
+            ctypes.windll.user32.DeleteMenu(hmenu, SC_CLOSE, MF_BYCOMMAND)
+    except Exception:
+        pass
+
+
+# Prevent garbage-collection of the ctypes callback.
+_console_ctrl_handler_ref = None
+
+
+def _install_console_close_handler() -> None:
+    """Backup handler: hide console instead of dying on CTRL_CLOSE_EVENT.
+
+    If something still triggers CTRL_CLOSE_EVENT (e.g. Task Manager
+    End-Task, or the close button was re-enabled), we hide the console
+    and return TRUE to tell Windows we handled the event.
+    """
+    global _console_ctrl_handler_ref
+    if sys.platform != "win32":
+        return
+
+    CTRL_CLOSE_EVENT = 2
+    HANDLER_ROUTINE = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+
+    @HANDLER_ROUTINE
+    def _handler(event: int) -> bool:
+        if event == CTRL_CLOSE_EVENT:
+            _set_console_visible(False)
+            return True          # handled – do NOT terminate the process
+        return False              # let the default / next handler deal with it
+
+    _console_ctrl_handler_ref = _handler          # prevent GC
+    ctypes.windll.kernel32.SetConsoleCtrlHandler(_handler, True)
+
+
 def _enable_high_dpi_mode() -> None:
     """Enable high-DPI awareness so the dashboard does not look blurry."""
     if sys.platform != "win32":
@@ -279,15 +328,20 @@ class DashboardWindow:
         if self._thread is not None and self._thread.is_alive():
             return
         self._close_requested = False
-        self._thread = threading.Thread(
-            target=self._run_window,
-            daemon=True,
-            name="tray-dashboard",
-        )
-        self._thread.start()
+        self._set_open(True)              # reflect state immediately for menu label
+        try:
+            self._thread = threading.Thread(
+                target=self._run_window,
+                daemon=True,
+                name="tray-dashboard",
+            )
+            self._thread.start()
+        except Exception:
+            self._set_open(False)
 
     def request_close(self) -> None:
         self._close_requested = True
+        self._set_open(False)             # reflect state immediately for menu label
 
     def toggle(self) -> None:
         if self.is_open:
@@ -299,7 +353,6 @@ class DashboardWindow:
         if not self.is_supported:
             return
 
-        self._set_open(True)
         root: Optional["tk.Tk"] = None
         try:
             cfg = self.controller.config
@@ -473,8 +526,11 @@ class DashboardWindow:
             root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
             root.deiconify()
             root.lift()
+            root.focus_force()
             root.attributes("-topmost", True)
-            root.after(250, lambda: root.attributes("-topmost", False))
+            # Keep topmost for 1 s so it reliably clears the taskbar z-order,
+            # then drop it so the user can interact with other windows behind.
+            root.after(1000, lambda: root.attributes("-topmost", False))
 
             def refresh_ui() -> None:
                 if self._close_requested:
@@ -527,7 +583,7 @@ class DashboardWindow:
                 root.after(dashboard_refresh_ms, refresh_ui)
 
             def on_close() -> None:
-                self._close_requested = True
+                self.request_close()
                 root.destroy()
 
             root.protocol("WM_DELETE_WINDOW", on_close)
@@ -549,6 +605,11 @@ def run_with_tray(controller: "FanController") -> None:
     # without a console (e.g. launched hidden), allocate one and attach logs.
     if _ensure_console_window(controller.logger):
         _set_console_visible(True)
+
+    # Prevent the console X button from killing the entire tray process.
+    # The user should use the tray icon's "Hide Console" or "Quit" instead.
+    _disable_console_close_button()
+    _install_console_close_handler()
 
     dashboard = DashboardWindow(controller)
     dashboard_warning_emitted = False
