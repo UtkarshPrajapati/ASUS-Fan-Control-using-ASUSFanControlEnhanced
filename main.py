@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections import deque
 from logging.handlers import RotatingFileHandler
@@ -291,6 +292,15 @@ class FanController:
         self._driver_incompatible: Optional[bool] = None  # None = not yet checked
         self._cached_driver_version: Optional[str] = None
 
+        # Runtime snapshot for tray/dashboard UI.
+        self._state_lock = threading.Lock()
+        self.last_raw_temp: Optional[int] = None
+        self.last_smoothed_temp: Optional[int] = None
+        self.last_reported_fan_speeds: Optional[str] = None
+        self.last_target_fan_speed: Optional[int] = None
+        self.last_status_message: str = "Initializing..."
+        self.last_updated_ts: float = time.time()
+
         # Resolve the active fan curve
         self._fan_curve: List[Tuple[int, int]] = self._resolve_fan_curve()
 
@@ -325,8 +335,45 @@ class FanController:
         self.config["curve"] = None
         self._fan_curve = PROFILES[profile_name]
         self.current_set_fan_percentage = None  # Force re-set on next cycle
+        self._update_runtime_state(status_message=f"Profile changed to {profile_name}.")
         self.logger.info(f"Switched to profile: {profile_name}")
         return True
+
+    def _update_runtime_state(
+        self,
+        *,
+        raw_temp: Optional[int] = None,
+        smoothed_temp: Optional[int] = None,
+        fan_speeds: Optional[str] = None,
+        target_speed: Optional[int] = None,
+        status_message: Optional[str] = None,
+    ) -> None:
+        """Update cached runtime fields for tray/dashboard UI."""
+        with self._state_lock:
+            self.last_raw_temp = raw_temp
+            self.last_smoothed_temp = smoothed_temp
+            self.last_reported_fan_speeds = fan_speeds
+            self.last_target_fan_speed = target_speed
+            if status_message:
+                self.last_status_message = status_message
+            self.last_updated_ts = time.time()
+
+    def get_status_snapshot(self) -> Dict[str, Any]:
+        """Return a thread-safe snapshot of current runtime state."""
+        with self._state_lock:
+            return {
+                "raw_temp": self.last_raw_temp,
+                "smoothed_temp": self.last_smoothed_temp,
+                "fan_speeds": self.last_reported_fan_speeds,
+                "target_fan_speed": self.last_target_fan_speed,
+                "current_set_fan_percentage": self.current_set_fan_percentage,
+                "profile": self.config.get("profile", "balanced"),
+                "driver_version": self._cached_driver_version,
+                "driver_incompatible": self._driver_incompatible,
+                "consecutive_failures": self.consecutive_failures,
+                "status_message": self.last_status_message,
+                "updated_ts": self.last_updated_ts,
+            }
 
     # -- Startup validation --------------------------------------------------
 
@@ -588,10 +635,13 @@ class FanController:
         self.running = True
 
         self.logger.info("Fan control loop started.")
+        self._update_runtime_state(status_message="Fan control loop started.")
 
         while self.running:
             try:
                 raw_temp = self.get_cpu_temp()
+                smoothed_temp: Optional[int] = None
+                status_message = "Running normally."
 
                 if raw_temp is not None and raw_temp > 0:
                     self.consecutive_failures = 0
@@ -599,6 +649,7 @@ class FanController:
                     # Spike detection (B2)
                     if self.detect_spike(raw_temp):
                         fan_speed = 100
+                        status_message = "Temperature spike detected, forcing fan to 100%."
                         self.logger.warning(f"Spike response: forcing fan to {fan_speed}%.")
                         if notify_enabled:
                             send_notification(
@@ -608,6 +659,7 @@ class FanController:
                     else:
                         smoothed_temp = self.get_smoothed_temp(raw_temp)
                         fan_speed = self.decide_fan_speed(smoothed_temp)
+                        status_message = "Running normally."
 
                     self.previous_temp = raw_temp
 
@@ -620,11 +672,13 @@ class FanController:
                     self._check_driver_if_needed()
 
                     if self._driver_incompatible:
+                        status_message = "Driver incompatible: temp reads 0, fan locked at 100%."
                         self.logger.critical(
                             f"Temp reads 0 (driver incompatible). Fan locked at 100%. "
                             f"Roll back the ASUS System Control Interface driver."
                         )
                     else:
+                        status_message = "Temp reads 0, safety mode (fan 100%)."
                         self.logger.warning(
                             f"Temp reads 0 ({self.consecutive_failures}/{max_failures}). "
                             f"Safety: fan set to 100%."
@@ -640,6 +694,7 @@ class FanController:
                     # raw_temp is None or negative -- exe failure
                     self.consecutive_failures += 1
                     fan_speed = 100  # Safety: max fan if temp unknown
+                    status_message = "Temperature read failed, safety mode (fan 100%)."
 
                     if self.consecutive_failures >= max_failures:
                         self.logger.critical(
@@ -669,23 +724,34 @@ class FanController:
                 self.logger.info(
                     f"CPU Temp: {temp_display}, Fan Speed: {fan_display} (Target: {fan_speed}%)"
                 )
+                self._update_runtime_state(
+                    raw_temp=raw_temp,
+                    smoothed_temp=smoothed_temp,
+                    fan_speeds=current_fan_speeds,
+                    target_speed=fan_speed,
+                    status_message=status_message,
+                )
 
                 sleep_time = self.adaptive_sleep(raw_temp)
                 time.sleep(sleep_time)
 
             except KeyboardInterrupt:
+                self._update_runtime_state(status_message="Stopped by user.")
                 self.logger.info("Script terminated by user.")
                 break
             except Exception as e:
+                self._update_runtime_state(status_message=f"Unexpected error: {e}")
                 self.logger.error(f"Unexpected error in control loop: {e}")
                 time.sleep(3)
 
         self.running = False
+        self._update_runtime_state(status_message="Fan control loop stopped.")
         self.logger.info("Fan control loop stopped.")
 
     def stop(self) -> None:
         """Signal the control loop to stop gracefully."""
         self.running = False
+        self._update_runtime_state(status_message="Stopping...")
 
 
 # ---------------------------------------------------------------------------

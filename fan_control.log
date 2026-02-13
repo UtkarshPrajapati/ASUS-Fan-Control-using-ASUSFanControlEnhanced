@@ -1,8 +1,15 @@
-2026-02-12 23:25:27,771 - INFO - Fan speed already at 19%, no change needed.
-2026-02-12 23:25:28,586 - INFO - CPU Temp: 30C, Fan Speed: 1338 1269 RPM (Target: 19%)
-2026-02-12 23:25:35,292 - INFO - Fan speed already at 19%, no change needed.
-2026-02-12 23:25:35,748 - INFO - CPU Temp: 41C, Fan Speed: 1342 1269 RPM (Target: 19%)
-2026-02-12 23:25:38,757 - INFO - Fan speed already at 19%, no change needed.
-2026-02-12 23:25:39,450 - INFO - CPU Temp: 35C, Fan Speed: 1340 1269 RPM (Target: 19%)
-2026-02-12 23:25:46,718 - INFO - New fan speeds: 16%
-2026-02-12 23:25:47,150 - INFO - CPU Temp: 31C, Fan Speed: 1167 1128 RPM (Target: 16%)
+2026-02-13 16:26:45,874 - INFO - CPU Temp: 38C, Fan Speed: 2393 2366 RPM (Target: 32%)
+2026-02-13 16:26:56,014 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:26:56,456 - INFO - CPU Temp: 40C, Fan Speed: 2393 2377 RPM (Target: 32%)
+2026-02-13 16:27:06,534 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:27:06,845 - INFO - CPU Temp: 41C, Fan Speed: 2387 2366 RPM (Target: 32%)
+2026-02-13 16:27:16,961 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:27:17,350 - INFO - CPU Temp: 43C, Fan Speed: 2393 2377 RPM (Target: 32%)
+2026-02-13 16:27:27,461 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:27:27,886 - INFO - CPU Temp: 42C, Fan Speed: 2385 2374 RPM (Target: 32%)
+2026-02-13 16:27:38,003 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:27:38,513 - INFO - CPU Temp: 43C, Fan Speed: 2395 2374 RPM (Target: 32%)
+2026-02-13 16:27:48,693 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:27:49,536 - INFO - CPU Temp: 39C, Fan Speed: 2390 2377 RPM (Target: 32%)
+2026-02-13 16:27:59,658 - INFO - Fan speed already at 32%, no change needed.
+2026-02-13 16:28:00,096 - INFO - CPU Temp: 43C, Fan Speed: 2387 2369 RPM (Target: 32%)

@@ -12,7 +12,14 @@ import time
 import ctypes
 import logging
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
+try:
+    import tkinter as tk
+    from tkinter import ttk
+except Exception:
+    tk = None  # type: ignore[assignment]
+    ttk = None  # type: ignore[assignment]
 
 try:
     import pystray  # type: ignore[import-untyped]
@@ -128,6 +135,280 @@ def _create_icon_image(temp: int = 0) -> "Image.Image":
     return img
 
 
+def _temp_hex_colour(temp: Optional[int]) -> str:
+    """Return a dashboard text color for the given temperature."""
+    if temp is None or temp <= 0:
+        return "#9CA3AF"  # Unknown
+    if temp < 45:
+        return "#22C55E"  # Cool
+    if temp < 65:
+        return "#FACC15"  # Warm
+    return "#EF4444"      # Hot
+
+
+class DashboardWindow:
+    """Small live dashboard window opened from the tray icon."""
+
+    def __init__(self, controller: "FanController") -> None:
+        self.controller = controller
+        self._thread: Optional[threading.Thread] = None
+        self._state_lock = threading.Lock()
+        self._is_open = False
+        self._close_requested = False
+
+    @property
+    def is_supported(self) -> bool:
+        return tk is not None and ttk is not None
+
+    @property
+    def is_open(self) -> bool:
+        with self._state_lock:
+            return self._is_open
+
+    def _set_open(self, value: bool) -> None:
+        with self._state_lock:
+            self._is_open = value
+
+    def show(self) -> None:
+        if not self.is_supported:
+            return
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._close_requested = False
+        self._thread = threading.Thread(
+            target=self._run_window,
+            daemon=True,
+            name="tray-dashboard",
+        )
+        self._thread.start()
+
+    def request_close(self) -> None:
+        self._close_requested = True
+
+    def toggle(self) -> None:
+        if self.is_open:
+            self.request_close()
+        else:
+            self.show()
+
+    def _run_window(self) -> None:
+        if not self.is_supported:
+            return
+
+        self._set_open(True)
+        root: Optional["tk.Tk"] = None
+        try:
+            root = tk.Tk()
+            root.title("ASUS Fan Control Dashboard")
+            root.geometry("520x360")
+            root.minsize(460, 320)
+            root.configure(bg="#111827")
+
+            container = tk.Frame(root, bg="#111827", padx=14, pady=14)
+            container.pack(fill="both", expand=True)
+
+            tk.Label(
+                container,
+                text="ASUS Fan Control",
+                bg="#111827",
+                fg="#E5E7EB",
+                font=("Segoe UI", 16, "bold"),
+            ).pack(anchor="w")
+            tk.Label(
+                container,
+                text="Live cooling status",
+                bg="#111827",
+                fg="#9CA3AF",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w", pady=(0, 10))
+
+            # Summary cards
+            cards = tk.Frame(container, bg="#111827")
+            cards.pack(fill="x", pady=(0, 10))
+
+            temp_card = tk.Frame(cards, bg="#1F2937", padx=12, pady=10)
+            temp_card.pack(side="left", fill="both", expand=True, padx=(0, 6))
+            fan_card = tk.Frame(cards, bg="#1F2937", padx=12, pady=10)
+            fan_card.pack(side="left", fill="both", expand=True, padx=(6, 0))
+
+            temp_value_var = tk.StringVar(value="Unknown")
+            smoothed_var = tk.StringVar(value="-")
+            target_var = tk.StringVar(value="--%")
+            rpm_var = tk.StringVar(value="Unknown")
+            profile_var = tk.StringVar(value="Unknown")
+            failures_var = tk.StringVar(value="0")
+            driver_var = tk.StringVar(value="Unknown")
+            status_var = tk.StringVar(value="Starting...")
+            updated_var = tk.StringVar(value="--:--:--")
+
+            tk.Label(
+                temp_card,
+                text="CPU Temperature",
+                bg="#1F2937",
+                fg="#D1D5DB",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w")
+            temp_value_label = tk.Label(
+                temp_card,
+                textvariable=temp_value_var,
+                bg="#1F2937",
+                fg="#22C55E",
+                font=("Segoe UI", 24, "bold"),
+            )
+            temp_value_label.pack(anchor="w", pady=(2, 0))
+            tk.Label(
+                temp_card,
+                textvariable=smoothed_var,
+                bg="#1F2937",
+                fg="#9CA3AF",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w")
+
+            tk.Label(
+                fan_card,
+                text="Target Fan Speed",
+                bg="#1F2937",
+                fg="#D1D5DB",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w")
+            tk.Label(
+                fan_card,
+                textvariable=target_var,
+                bg="#1F2937",
+                fg="#60A5FA",
+                font=("Segoe UI", 24, "bold"),
+            ).pack(anchor="w", pady=(2, 0))
+            tk.Label(
+                fan_card,
+                textvariable=rpm_var,
+                bg="#1F2937",
+                fg="#9CA3AF",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w")
+
+            # Progress bars
+            bars = tk.Frame(container, bg="#111827")
+            bars.pack(fill="x", pady=(0, 10))
+            tk.Label(bars, text="Temp", bg="#111827", fg="#9CA3AF", font=("Segoe UI", 9)).grid(
+                row=0, column=0, sticky="w", padx=(0, 8)
+            )
+            temp_bar = ttk.Progressbar(bars, orient="horizontal", mode="determinate", maximum=100)
+            temp_bar.grid(row=0, column=1, sticky="ew")
+
+            tk.Label(bars, text="Fan", bg="#111827", fg="#9CA3AF", font=("Segoe UI", 9)).grid(
+                row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0)
+            )
+            fan_bar = ttk.Progressbar(bars, orient="horizontal", mode="determinate", maximum=100)
+            fan_bar.grid(row=1, column=1, sticky="ew", pady=(6, 0))
+            bars.grid_columnconfigure(1, weight=1)
+
+            # Detail rows
+            details = tk.Frame(container, bg="#111827")
+            details.pack(fill="x")
+
+            tk.Label(details, text="Profile:", bg="#111827", fg="#9CA3AF", font=("Segoe UI", 10)).grid(
+                row=0, column=0, sticky="w"
+            )
+            tk.Label(details, textvariable=profile_var, bg="#111827", fg="#E5E7EB", font=("Segoe UI", 10, "bold")).grid(
+                row=0, column=1, sticky="w", padx=(6, 18)
+            )
+
+            tk.Label(details, text="Failures:", bg="#111827", fg="#9CA3AF", font=("Segoe UI", 10)).grid(
+                row=0, column=2, sticky="w"
+            )
+            tk.Label(details, textvariable=failures_var, bg="#111827", fg="#E5E7EB", font=("Segoe UI", 10, "bold")).grid(
+                row=0, column=3, sticky="w", padx=(6, 0)
+            )
+
+            tk.Label(details, text="Driver:", bg="#111827", fg="#9CA3AF", font=("Segoe UI", 10)).grid(
+                row=1, column=0, sticky="w", pady=(4, 0)
+            )
+            tk.Label(details, textvariable=driver_var, bg="#111827", fg="#E5E7EB", font=("Segoe UI", 10)).grid(
+                row=1, column=1, columnspan=3, sticky="w", padx=(6, 0), pady=(4, 0)
+            )
+
+            # Status footer
+            tk.Label(
+                container,
+                textvariable=status_var,
+                bg="#111827",
+                fg="#E5E7EB",
+                wraplength=490,
+                justify="left",
+                font=("Segoe UI", 10),
+            ).pack(anchor="w", pady=(10, 2))
+            tk.Label(
+                container,
+                textvariable=updated_var,
+                bg="#111827",
+                fg="#6B7280",
+                font=("Segoe UI", 9),
+            ).pack(anchor="w")
+
+            def refresh_ui() -> None:
+                if self._close_requested:
+                    root.destroy()
+                    return
+
+                snapshot = self.controller.get_status_snapshot()
+                raw_temp = snapshot.get("raw_temp")
+                smoothed_temp = snapshot.get("smoothed_temp")
+                target_speed = snapshot.get("target_fan_speed")
+                current_set = snapshot.get("current_set_fan_percentage")
+                fan_speeds = snapshot.get("fan_speeds")
+                profile = snapshot.get("profile")
+                failures = snapshot.get("consecutive_failures", 0)
+                driver_version = snapshot.get("driver_version")
+                driver_incompatible = snapshot.get("driver_incompatible")
+                status_message = snapshot.get("status_message", "Running")
+                updated_ts = snapshot.get("updated_ts", time.time())
+
+                temp_value_var.set("Unknown" if raw_temp is None else f"{raw_temp} C")
+                temp_value_label.config(fg=_temp_hex_colour(raw_temp))
+                smoothed_var.set(
+                    "Smoothed: -" if smoothed_temp is None else f"Smoothed: {smoothed_temp} C"
+                )
+
+                display_target = target_speed if target_speed is not None else current_set
+                target_var.set("--%" if display_target is None else f"{display_target}%")
+                rpm_var.set(f"RPM: {fan_speeds or 'Unknown'}")
+                profile_var.set(str(profile).capitalize() if profile else "Unknown")
+                failures_var.set(str(failures))
+
+                if driver_version:
+                    suffix = " (incompatible)" if driver_incompatible else ""
+                    driver_var.set(f"{driver_version}{suffix}")
+                else:
+                    driver_var.set("Unknown")
+
+                status_var.set(str(status_message))
+                if isinstance(updated_ts, (int, float)):
+                    updated_var.set(f"Last update: {time.strftime('%H:%M:%S', time.localtime(updated_ts))}")
+                else:
+                    updated_var.set("Last update: --:--:--")
+
+                temp_bar["value"] = max(0, min(100, raw_temp if isinstance(raw_temp, int) else 0))
+                fan_bar["value"] = max(
+                    0,
+                    min(100, display_target if isinstance(display_target, int) else 0),
+                )
+
+                root.after(1000, refresh_ui)
+
+            def on_close() -> None:
+                self._close_requested = True
+                root.destroy()
+
+            root.protocol("WM_DELETE_WINDOW", on_close)
+            refresh_ui()
+            root.mainloop()
+        except Exception as e:
+            self.controller.logger.error(f"Failed to open dashboard window: {e}")
+        finally:
+            self._set_open(False)
+            self._close_requested = False
+
+
 def run_with_tray(controller: "FanController") -> None:
     """Run the fan controller with a system tray icon on the main thread."""
 
@@ -136,9 +417,13 @@ def run_with_tray(controller: "FanController") -> None:
     if _ensure_console_window(controller.logger):
         _set_console_visible(True)
 
+    dashboard = DashboardWindow(controller)
+    dashboard_warning_emitted = False
+
     # -- Menu callbacks ------------------------------------------------------
 
     def on_quit(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+        dashboard.request_close()
         controller.stop()
         _icon.stop()
 
@@ -151,6 +436,21 @@ def run_with_tray(controller: "FanController") -> None:
         def checker(_item: pystray.MenuItem) -> bool:
             return controller.config.get("profile") == name
         return checker
+
+    def _dashboard_label(_item: pystray.MenuItem) -> str:
+        return "Hide Dashboard" if dashboard.is_open else "Show Dashboard"
+
+    def _toggle_dashboard(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+        nonlocal dashboard_warning_emitted
+        if not dashboard.is_supported:
+            if not dashboard_warning_emitted:
+                controller.logger.warning(
+                    "Dashboard UI is unavailable (tkinter is missing in this Python build)."
+                )
+                dashboard_warning_emitted = True
+            return
+        dashboard.toggle()
+        _icon.update_menu()
 
     def _console_label(_item: pystray.MenuItem) -> str:
         if _is_console_visible():
@@ -175,6 +475,13 @@ def run_with_tray(controller: "FanController") -> None:
     ]
 
     menu = pystray.Menu(
+        # Left-click action: pystray triggers the default menu item.
+        pystray.MenuItem("Toggle Dashboard", _toggle_dashboard, default=True, visible=False),
+        pystray.MenuItem(
+            _dashboard_label,
+            _toggle_dashboard,
+            enabled=lambda _item: dashboard.is_supported,
+        ),
         pystray.MenuItem("Profiles", pystray.Menu(*profile_items)),
         pystray.MenuItem(
             _console_label,
@@ -197,22 +504,32 @@ def run_with_tray(controller: "FanController") -> None:
         """Run the fan controller in a daemon thread."""
         controller.run()
         # When the controller stops, also stop the tray icon
+        dashboard.request_close()
         icon.stop()
 
     def icon_updater() -> None:
         """Periodically update the tray icon image and tooltip."""
         while controller.running:
-            temp = controller.previous_temp or 0
-            speed = controller.current_set_fan_percentage or 0
-            profile = controller.config.get("profile", "?")
+            snapshot = controller.get_status_snapshot()
+            raw_temp = snapshot.get("raw_temp")
+            temp = raw_temp if isinstance(raw_temp, int) and raw_temp > 0 else 0
+            target_speed = snapshot.get("target_fan_speed")
+            current_set_speed = snapshot.get("current_set_fan_percentage")
+            speed = (
+                target_speed
+                if isinstance(target_speed, int)
+                else current_set_speed if isinstance(current_set_speed, int) else 0
+            )
+            profile = str(snapshot.get("profile", "?")).capitalize()
             icon.icon = _create_icon_image(temp)
-            icon.title = f"CPU: {temp}\u00b0C | Fan: {speed}% | {profile.capitalize()}"
-            time.sleep(5)
+            icon.title = f"CPU: {temp}\u00b0C | Fan: {speed}% | {profile}"
+            time.sleep(2)
 
     # -- Graceful Ctrl+C handling --------------------------------------------
 
     def _shutdown(signum: int = 0, frame: object = None) -> None:
         """Handle SIGINT (Ctrl+C) without the ctypes callback traceback."""
+        dashboard.request_close()
         controller.stop()
         try:
             icon.stop()
