@@ -10,6 +10,7 @@ import signal
 import threading
 import time
 import ctypes
+from ctypes import wintypes
 import logging
 import sys
 from typing import TYPE_CHECKING, Optional
@@ -67,6 +68,89 @@ def _set_console_visible(visible: bool) -> None:
         ctypes.windll.user32.ShowWindow(hwnd, sw_show if visible else sw_hide)
     except Exception:
         pass
+
+
+def _enable_high_dpi_mode() -> None:
+    """Enable high-DPI awareness so the dashboard does not look blurry."""
+    if sys.platform != "win32":
+        return
+
+    # Best to fallback order:
+    # 1) Per-monitor v2 DPI awareness (Win10+)
+    # 2) Per-monitor DPI awareness (shcore)
+    # 3) System DPI aware (legacy)
+    try:
+        # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def _get_work_area_bounds() -> Optional[tuple[int, int, int, int]]:
+    """Return usable desktop bounds (excluding taskbar) on Windows."""
+    if sys.platform != "win32":
+        return None
+    rect = wintypes.RECT()
+    # SPI_GETWORKAREA = 0x0030
+    ok = ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+    if not ok:
+        return None
+    return (rect.left, rect.top, rect.right, rect.bottom)
+
+
+def _compute_dashboard_position(root: "tk.Tk", width: int, height: int) -> tuple[int, int]:
+    """Compute a reliable bottom-right position in Tk coordinate space."""
+    screen_w = int(root.winfo_screenwidth())
+    screen_h = int(root.winfo_screenheight())
+
+    # Default to full screen bounds in Tk coordinates.
+    left = 0
+    top = 0
+    right = screen_w
+    bottom = screen_h
+
+    # If work-area exists, map it into Tk coordinates to account for DPI scaling
+    # differences between Win32 pixels and Tk units.
+    work = _get_work_area_bounds()
+    if work and sys.platform == "win32":
+        left_w, top_w, right_w, bottom_w = work
+        try:
+            full_w = int(ctypes.windll.user32.GetSystemMetrics(0))
+            full_h = int(ctypes.windll.user32.GetSystemMetrics(1))
+        except Exception:
+            full_w, full_h = screen_w, screen_h
+
+        if full_w > 0 and full_h > 0:
+            scale_x = screen_w / full_w
+            scale_y = screen_h / full_h
+            left = int(left_w * scale_x)
+            top = int(top_w * scale_y)
+            right = int(right_w * scale_x)
+            bottom = int(bottom_w * scale_y)
+
+            # Guard against invalid conversions.
+            if right <= left or bottom <= top:
+                left, top, right, bottom = 0, 0, screen_w, screen_h
+
+    margin = 14
+    # Extra lift so the window never tucks under taskbar auto-hide edges
+    # or shell overlays on some DPI/taskbar setups.
+    bottom_safe_margin = 56
+    pos_x = max(left + margin, right - width - margin)
+    pos_y = max(top + margin, bottom - height - margin - bottom_safe_margin)
+    return pos_x, pos_y
 
 
 def _has_tray_console_handler(logger: logging.Logger) -> bool:
@@ -199,6 +283,7 @@ class DashboardWindow:
         root: Optional["tk.Tk"] = None
         try:
             root = tk.Tk()
+            root.withdraw()
             root.title("ASUS Fan Control Dashboard")
             root.geometry("520x360")
             root.minsize(460, 320)
@@ -345,6 +430,17 @@ class DashboardWindow:
                 font=("Segoe UI", 9),
             ).pack(anchor="w")
 
+            # Place near tray area (bottom-right) and bring to front.
+            root.update_idletasks()
+            width = max(int(root.winfo_width()), int(root.winfo_reqwidth()), 520)
+            height = max(int(root.winfo_height()), int(root.winfo_reqheight()), 360)
+            pos_x, pos_y = _compute_dashboard_position(root, width, height)
+            root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+            root.deiconify()
+            root.lift()
+            root.attributes("-topmost", True)
+            root.after(250, lambda: root.attributes("-topmost", False))
+
             def refresh_ui() -> None:
                 if self._close_requested:
                     root.destroy()
@@ -411,6 +507,8 @@ class DashboardWindow:
 
 def run_with_tray(controller: "FanController") -> None:
     """Run the fan controller with a system tray icon on the main thread."""
+
+    _enable_high_dpi_mode()
 
     # In tray mode, keep console visible by default. If the process started
     # without a console (e.g. launched hidden), allocate one and attach logs.
