@@ -52,6 +52,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "dashboard_bottom_offset": 56,
     "profile": "balanced",
     "curve": None,
+    "console_visible_on_start": False,
+    "console_maximized": True,
     "enable_tray": True,
     "enable_notifications": False,
 }

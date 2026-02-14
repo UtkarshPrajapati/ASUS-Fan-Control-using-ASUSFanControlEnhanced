@@ -601,10 +601,22 @@ def run_with_tray(controller: "FanController") -> None:
 
     _enable_high_dpi_mode()
 
-    # In tray mode, keep console visible by default. If the process started
-    # without a console (e.g. launched hidden), allocate one and attach logs.
+    # Console behaviour driven by config.
+    console_visible = controller.config.get("console_visible_on_start", True)
+    console_maximized = controller.config.get("console_maximized", True)
+
+    # Ensure a console window exists and is wired to logging, even if we
+    # plan to hide it (the user can still toggle it from the tray menu).
     if _ensure_console_window(controller.logger):
-        _set_console_visible(True)
+        _set_console_visible(bool(console_visible))
+        if console_visible and console_maximized:
+            hwnd = _get_console_window()
+            if hwnd:
+                SW_MAXIMIZE = 3
+                try:
+                    ctypes.windll.user32.ShowWindow(hwnd, SW_MAXIMIZE)
+                except Exception:
+                    pass
 
     # Prevent the console X button from killing the entire tray process.
     # The user should use the tray icon's "Hide Console" or "Quit" instead.

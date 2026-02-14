@@ -27,6 +27,8 @@
     "dashboard_min_height": 320,
     "dashboard_margin": 14,
     "dashboard_bottom_offset": 56,
+    "console_visible_on_start": false,
+    "console_maximized": true,
     "profile": "balanced",
     "curve": null,
     "enable_tray": true,
