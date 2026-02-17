@@ -119,6 +119,31 @@ def _install_console_close_handler() -> None:
     ctypes.windll.kernel32.SetConsoleCtrlHandler(_handler, True)
 
 
+def _start_console_minimize_watcher() -> None:
+    """Treat the console minimize button as 'hide console'.
+
+    A lightweight daemon thread polls ``IsIconic`` every 150 ms.  When the
+    user clicks minimize, the console is hidden instead of sitting in the
+    taskbar -- the tray menu "Show Console" can bring it back.
+    """
+    def _watch() -> None:
+        is_iconic = ctypes.windll.user32.IsIconic
+        while True:
+            if not _is_console_visible():
+                time.sleep(1)           # nothing to watch while hidden
+                continue
+            hwnd = _get_console_window()
+            if hwnd:
+                try:
+                    if is_iconic(hwnd):
+                        _set_console_visible(False)
+                except Exception:
+                    pass
+            time.sleep(0.15)
+
+    threading.Thread(target=_watch, daemon=True, name="console-min-watcher").start()
+
+
 def _enable_high_dpi_mode() -> None:
     """Enable high-DPI awareness so the dashboard does not look blurry."""
     if sys.platform != "win32":
@@ -627,6 +652,8 @@ def run_with_tray(controller: "FanController") -> None:
     # The user should use the tray icon's "Hide Console" or "Quit" instead.
     _disable_console_close_button()
     _install_console_close_handler()
+    # Treat the minimize button as "hide console".
+    _start_console_minimize_watcher()
 
     dashboard = DashboardWindow(controller)
     dashboard_warning_emitted = False
