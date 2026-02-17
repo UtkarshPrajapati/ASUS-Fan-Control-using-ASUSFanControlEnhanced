@@ -745,6 +745,13 @@ class FanController:
                 if raw_temp is not None and raw_temp > 0:
                     self.consecutive_failures = 0
 
+                    # If temps are back after the driver was flagged incompatible,
+                    # force an immediate re-check so the dashboard / cached state
+                    # updates to reflect the rollback.
+                    if self._driver_incompatible:
+                        self._last_driver_check = 0
+                        self._check_driver_if_needed()
+
                     # Spike detection (B2)
                     if self.detect_spike(raw_temp):
                         fan_speed = 100
