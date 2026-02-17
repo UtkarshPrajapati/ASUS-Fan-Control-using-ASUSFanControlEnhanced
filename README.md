@@ -14,10 +14,13 @@ A Python script to dynamically control ASUS laptop fan speeds based on CPU tempe
 - **Consecutive Failure Tracking** -- escalates logging severity after repeated read failures and locks fans at 100%.
 - **External Configuration** -- all settings live in `config.json`; no need to edit source code.
 - **CLI Overrides** -- command-line arguments override config file values on the fly.
-- **System Tray Icon** -- enabled by default in interactive sessions, with profile switching and quit button.
+- **System Tray Icon** -- enabled by default in interactive sessions, with profile switching, dashboard toggle, and console management.
+- **Live Dashboard** -- left-click the tray icon to open a real-time dashboard showing CPU temperature, fan speed, profile, driver status, and more.
+- **Console Management** -- console window can be shown/hidden from the tray menu. The close (X) button is disabled to prevent accidentally killing the process, and minimizing the console hides it to the tray.
 - **Temperature-Coloured Console Logs** -- terminal lines use a green->yellow->red gradient based on CPU temperature.
 - **Windows Toast Notifications** (optional) -- alerts on critical events like overheating or repeated failures.
-- **Driver Compatibility Detection** -- detects incompatible ASUS System Control Interface driver updates and logs rollback guidance.
+- **Driver Compatibility Detection** -- detects incompatible ASUS System Control Interface driver updates (versions above 3.1.38.0 cause temperature reads to return 0).
+- **Automatic Driver Rollback** -- when an incompatible driver is detected, automatically rolls back to the previous version using the Win32 `DiRollbackDriver` API. Requires Administrator privileges. Disable with `"auto_rollback_driver": false` in config.
 - **Rotating Log** -- logs to `runtime/logs/fan_control.log` with automatic rotation to keep file size bounded.
 - **Console Output** -- live status output in the terminal alongside the log file.
 - **Auto-Start at System Startup** -- PowerShell script to register a Task Scheduler startup task.
@@ -79,6 +82,13 @@ python main.py --tray
 ```
 
 Tray is enabled by default in `config.json`. Use `--no-tray` to disable it.
+
+Tray behaviour:
+
+- **Left-click** the icon to toggle the live dashboard.
+- **Right-click** for the menu: Show/Hide Dashboard, Profiles, Show/Hide Console, Quit.
+- The console **close (X) button is disabled** to prevent killing the process -- use the tray menu instead.
+- **Minimizing** the console window hides it to the tray automatically.
 
 ### With notifications
 
@@ -145,12 +155,26 @@ if `config.json` is missing, incomplete, or invalid JSON.
     "dashboard_min_height": 320,
     "dashboard_margin": 14,
     "dashboard_bottom_offset": 56,
+    "console_visible_on_start": false,
+    "console_maximized": true,
+    "auto_rollback_driver": true,
     "profile": "balanced",
     "curve": null,
     "enable_tray": true,
     "enable_notifications": false
 }
 ```
+
+### Key reference
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `console_visible_on_start` | `false` | Show the console window when the tray starts. Toggle from the tray menu anytime. |
+| `console_maximized` | `true` | Maximize the console window on show (only when `console_visible_on_start` is `true`). |
+| `auto_rollback_driver` | `true` | Automatically roll back the ASUS System Control Interface driver when an incompatible version is detected. |
+| `dashboard_*` | various | Size, position margins, and refresh rate for the live dashboard window. |
+| `adaptive_sleep_*` | various | Poll intervals (seconds) for cool, warm, hot, and error temperature ranges. |
+| `driver_check_interval_seconds` | `60` | How often (seconds) to re-check the ASUS driver version when temps read 0. |
 
 ### Runtime folders
 
