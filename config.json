@@ -29,6 +29,7 @@
     "dashboard_bottom_offset": 56,
     "console_visible_on_start": false,
     "console_maximized": true,
+    "auto_rollback_driver": true,
     "profile": "balanced",
     "curve": null,
     "enable_tray": true,

@@ -54,6 +54,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "curve": None,
     "console_visible_on_start": False,
     "console_maximized": True,
+    "auto_rollback_driver": True,
     "enable_tray": True,
     "enable_notifications": False,
 }
@@ -334,6 +335,161 @@ def send_notification(title: str, message: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Automatic driver rollback (Win32 SetupAPI + newdev.dll)
+# ---------------------------------------------------------------------------
+
+
+def _rollback_asus_driver(logger: logging.Logger) -> Tuple[bool, str, bool]:
+    """Attempt to auto-rollback the ASUS System Control Interface driver.
+
+    Uses SetupAPI to locate the device by hardware-ID pattern ``*ASUS2018*``
+    and ``DiRollbackDriver`` from ``newdev.dll`` to restore the previous
+    driver.  Requires Administrator privileges.
+
+    Returns:
+        (success, message, needs_reboot)
+    """
+    if sys.platform != "win32":
+        return False, "Driver rollback is only supported on Windows.", False
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        # -- ctypes structures -------------------------------------------------
+
+        class _GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", ctypes.c_ulong),
+                ("Data2", ctypes.c_ushort),
+                ("Data3", ctypes.c_ushort),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        class _SP_DEVINFO_DATA(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("ClassGuid", _GUID),
+                ("DevInst", wintypes.DWORD),
+                ("Reserved", ctypes.c_void_p),   # ULONG_PTR
+            ]
+
+        # -- Load DLLs (use_last_error so we can read GetLastError) -----------
+
+        setupapi = ctypes.WinDLL("setupapi.dll", use_last_error=True)
+        newdev = ctypes.WinDLL("newdev.dll", use_last_error=True)
+
+        # -- Constants ---------------------------------------------------------
+
+        DIGCF_ALLCLASSES = 0x00000004
+        DIGCF_PRESENT = 0x00000002
+        SPDRP_HARDWAREID = 0x00000001
+        ROLLBACK_FLAG_NO_UI = 0x00000001
+        INVALID_HANDLE = ctypes.c_void_p(-1).value
+
+        # -- Function signatures -----------------------------------------------
+
+        setupapi.SetupDiGetClassDevsW.argtypes = [
+            ctypes.POINTER(_GUID), wintypes.LPCWSTR,
+            wintypes.HWND, wintypes.DWORD,
+        ]
+        setupapi.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+
+        setupapi.SetupDiEnumDeviceInfo.argtypes = [
+            ctypes.c_void_p, wintypes.DWORD,
+            ctypes.POINTER(_SP_DEVINFO_DATA),
+        ]
+        setupapi.SetupDiEnumDeviceInfo.restype = wintypes.BOOL
+
+        setupapi.SetupDiGetDeviceRegistryPropertyW.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(_SP_DEVINFO_DATA),
+            wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+            ctypes.c_void_p, wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        setupapi.SetupDiGetDeviceRegistryPropertyW.restype = wintypes.BOOL
+
+        setupapi.SetupDiDestroyDeviceInfoList.argtypes = [ctypes.c_void_p]
+        setupapi.SetupDiDestroyDeviceInfoList.restype = wintypes.BOOL
+
+        newdev.DiRollbackDriver.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(_SP_DEVINFO_DATA),
+            wintypes.HWND, wintypes.DWORD, ctypes.POINTER(wintypes.BOOL),
+        ]
+        newdev.DiRollbackDriver.restype = wintypes.BOOL
+
+        # -- Enumerate devices and find ASUS2018 --------------------------------
+
+        dev_info = setupapi.SetupDiGetClassDevsW(
+            None, None, None, DIGCF_ALLCLASSES | DIGCF_PRESENT,
+        )
+        if not dev_info or dev_info == INVALID_HANDLE:
+            return False, "Failed to enumerate system devices.", False
+
+        try:
+            dev_data = _SP_DEVINFO_DATA()
+            dev_data.cbSize = ctypes.sizeof(_SP_DEVINFO_DATA)
+            found = False
+            idx = 0
+
+            while setupapi.SetupDiEnumDeviceInfo(dev_info, idx, ctypes.byref(dev_data)):
+                required = wintypes.DWORD(0)
+                setupapi.SetupDiGetDeviceRegistryPropertyW(
+                    dev_info, ctypes.byref(dev_data), SPDRP_HARDWAREID,
+                    None, None, 0, ctypes.byref(required),
+                )
+                if required.value > 0:
+                    buf = ctypes.create_string_buffer(required.value)
+                    if setupapi.SetupDiGetDeviceRegistryPropertyW(
+                        dev_info, ctypes.byref(dev_data), SPDRP_HARDWAREID,
+                        None, buf, required.value, None,
+                    ):
+                        hw_ids = buf.raw.decode("utf-16-le", errors="ignore").upper()
+                        if "ASUS2018" in hw_ids:
+                            found = True
+                            break
+
+                idx += 1
+                dev_data = _SP_DEVINFO_DATA()
+                dev_data.cbSize = ctypes.sizeof(_SP_DEVINFO_DATA)
+
+            if not found:
+                return False, "ASUS System Control Interface device not found.", False
+
+            # -- Call DiRollbackDriver -----------------------------------------
+
+            need_reboot = wintypes.BOOL(False)
+            ok = newdev.DiRollbackDriver(
+                dev_info, ctypes.byref(dev_data),
+                None, ROLLBACK_FLAG_NO_UI,
+                ctypes.byref(need_reboot),
+            )
+
+            if ok:
+                reboot = bool(need_reboot.value)
+                msg = (
+                    "Driver rolled back successfully. Reboot required to complete."
+                    if reboot
+                    else "Driver rolled back successfully."
+                )
+                return True, msg, reboot
+
+            err = ctypes.get_last_error()
+            if err == 5:        # ERROR_ACCESS_DENIED
+                return False, "Rollback failed: administrator privileges required.", False
+            if err == 259:      # ERROR_NO_MORE_ITEMS
+                return False, "Rollback failed: no backup driver available.", False
+            return False, f"Rollback failed (Windows error {err}).", False
+        finally:
+            setupapi.SetupDiDestroyDeviceInfoList(dev_info)
+
+    except OSError as exc:
+        return False, f"Rollback unavailable: {exc}", False
+    except Exception as exc:
+        return False, f"Rollback attempt failed: {exc}", False
+
+
+# ---------------------------------------------------------------------------
 # FanController
 # ---------------------------------------------------------------------------
 
@@ -356,6 +512,8 @@ class FanController:
         self._last_driver_check: float = 0.0
         self._driver_incompatible: Optional[bool] = None  # None = not yet checked
         self._cached_driver_version: Optional[str] = None
+        self._driver_rollback_attempted: bool = False
+        self._driver_rollback_pending_reboot: bool = False
 
         # Runtime snapshot for tray/dashboard UI.
         self._state_lock = threading.Lock()
@@ -565,6 +723,36 @@ class FanController:
         if current > COMPATIBLE_DRIVER_VERSION:
             self._driver_incompatible = True
             compatible_str = ".".join(str(x) for x in COMPATIBLE_DRIVER_VERSION)
+
+            # --- Auto-rollback (attempted once per session) -------------------
+            if (
+                self.config.get("auto_rollback_driver", True)
+                and not self._driver_rollback_attempted
+            ):
+                self._driver_rollback_attempted = True
+                self.logger.warning(
+                    f"Incompatible driver v{version_str} detected. "
+                    f"Attempting automatic rollback to v{compatible_str}..."
+                )
+                success, msg, needs_reboot = _rollback_asus_driver(self.logger)
+                if success and not needs_reboot:
+                    self.logger.info(f"Auto-rollback complete: {msg}")
+                    send_notification("Driver Rolled Back", msg)
+                    self._driver_incompatible = None
+                    self._last_driver_check = 0  # re-verify on next pass
+                    return
+                if success and needs_reboot:
+                    self._driver_rollback_pending_reboot = True
+                    self.logger.warning(f"Auto-rollback complete: {msg}")
+                    send_notification("Reboot Required", msg)
+                    return  # don't log the scary CRITICAL below
+                # Rollback failed -- fall through to manual instructions.
+                self.logger.warning(f"Auto-rollback unsuccessful: {msg}")
+
+            # If a rollback is pending reboot, just remind gently once.
+            if self._driver_rollback_pending_reboot:
+                return
+
             self.logger.critical(
                 f"ASUS System Control Interface driver v{version_str} is INCOMPATIBLE "
                 f"(temp reads return 0). Roll back to v{compatible_str} or earlier.  "
@@ -778,11 +966,18 @@ class FanController:
                     self._check_driver_if_needed()
 
                     if self._driver_incompatible:
-                        status_message = "Driver incompatible: temp reads 0, fan locked at 100%."
-                        self.logger.critical(
-                            f"Temp reads 0 (driver incompatible). Fan locked at 100%. "
-                            f"Roll back the ASUS System Control Interface driver."
-                        )
+                        if self._driver_rollback_pending_reboot:
+                            status_message = "Driver rolled back. Reboot to complete."
+                            self.logger.warning(
+                                "Temp reads 0 (driver rolled back, reboot pending). "
+                                "Fan locked at 100%."
+                            )
+                        else:
+                            status_message = "Driver incompatible: temp reads 0, fan locked at 100%."
+                            self.logger.critical(
+                                f"Temp reads 0 (driver incompatible). Fan locked at 100%. "
+                                f"Roll back the ASUS System Control Interface driver."
+                            )
                     else:
                         status_message = "Temp reads 0, safety mode (fan 100%)."
                         self.logger.warning(
