@@ -28,9 +28,9 @@ A Python script to dynamically control ASUS laptop fan speeds based on CPU tempe
 ## Prerequisites
 
 1. **Python 3.8+** installed and on PATH.
-2. **`AsusFanControl.exe`** -- place this utility in `runtime/bin/AsusFanControl.exe` (recommended). PATH fallback still works if the configured path is missing.
+2. **`AsusFanControl.exe`** -- included in `runtime/bin/` along with its companion files.
 
-### Optional dependencies
+### Optional dependencies (Recommended)
 
 Install for extra features:
 
@@ -43,16 +43,32 @@ pip install -r requirements.txt
 | `pystray` + `Pillow` | System tray icon (`--tray`) |
 | `winotify` | Windows toast notifications (`--notifications`) |
 
-## Installation
+## Quick Start
 
 ```bash
+# 1. Clone the repo
 git clone https://github.com/UtkarshPrajapati/ASUS-Fan-Control-using-ASUSFanControlEnhanced
 cd ASUS-Fan-Control-using-ASUSFanControlEnhanced
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Test that everything works
+python main.py
+#    You should see temperature readings and fan speed changes in the console.
+#    Press Ctrl+C to stop once you've confirmed it works.
+
+# 4. Set up auto-start (run as Administrator)
+.\autostart.ps1 install
+#    This registers two Task Scheduler tasks so fans are managed automatically
+#    at every boot -- even before you log in. Restart your PC to activate.
 ```
 
-Place `AsusFanControl.exe` at `runtime/bin/AsusFanControl.exe` (default configured location).
+After step 4 you're done. The fan controller runs in the background at startup, and a tray icon appears when you log in. Right-click the tray icon for options, or left-click to open the live dashboard.
 
 ## Usage
+
+The commands below are for manual/one-off runs. If you've already installed via `autostart.ps1`, the script runs automatically and you don't need these.
 
 ### Basic
 
@@ -60,7 +76,7 @@ Place `AsusFanControl.exe` at `runtime/bin/AsusFanControl.exe` (default configur
 python main.py
 ```
 
-The script validates `AsusFanControl.exe`, then runs in a loop adjusting fan speed. Press `Ctrl+C` to stop.
+Validates `AsusFanControl.exe`, then runs in a loop adjusting fan speed. Press `Ctrl+C` to stop.
 
 ### With a specific profile
 
@@ -178,10 +194,8 @@ if `config.json` is missing, incomplete, or invalid JSON.
 
 ### Runtime folders
 
-- `runtime/bin/` -- expected location for `AsusFanControl.exe`
-- `runtime/logs/` -- rotating log output location
-
-These folders are created automatically at startup if missing.
+- `runtime/bin/` -- contains `AsusFanControl.exe` and companion files (included in the repo).
+- `runtime/logs/` -- rotating log output (created automatically, gitignored).
 
 ### Custom fan curve
 
@@ -205,7 +219,9 @@ Temperatures between waypoints are linearly interpolated. Below the first point 
 
 ## Auto-Start at System Startup
 
-Use the included PowerShell script to register **two** Windows Task Scheduler tasks:
+> Already covered in [Quick Start](#quick-start) step 4. Details below for reference.
+
+The included PowerShell script registers **two** Windows Task Scheduler tasks:
 
 - `ASUSFanControlEnhanced` (core)
   - Trigger: **At system startup**
