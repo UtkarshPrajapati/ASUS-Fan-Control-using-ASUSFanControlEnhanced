@@ -62,10 +62,16 @@ def _set_console_visible(visible: bool) -> None:
     hwnd = _get_console_window()
     if hwnd == 0:
         return
-    sw_show = 5
-    sw_hide = 0
     try:
-        ctypes.windll.user32.ShowWindow(hwnd, sw_show if visible else sw_hide)
+        if visible:
+            ctypes.windll.user32.ShowWindow(hwnd, 5)       # SW_SHOW
+            # If the window was minimized before it was hidden, SW_SHOW
+            # restores it in the minimized state and the minimize-watcher
+            # would immediately hide it again.  SW_RESTORE clears that.
+            if ctypes.windll.user32.IsIconic(hwnd):
+                ctypes.windll.user32.ShowWindow(hwnd, 9)   # SW_RESTORE
+        else:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)       # SW_HIDE
     except Exception:
         pass
 
@@ -119,12 +125,15 @@ def _install_console_close_handler() -> None:
     ctypes.windll.kernel32.SetConsoleCtrlHandler(_handler, True)
 
 
-def _start_console_minimize_watcher() -> None:
+def _start_console_minimize_watcher(on_hide: "Optional[callable]" = None) -> None:
     """Treat the console minimize button as 'hide console'.
 
     A lightweight daemon thread polls ``IsIconic`` every 150 ms.  When the
     user clicks minimize, the console is hidden instead of sitting in the
     taskbar -- the tray menu "Show Console" can bring it back.
+
+    *on_hide* is an optional callback invoked after the console is hidden
+    (e.g. ``icon.update_menu`` to refresh the tray label).
     """
     def _watch() -> None:
         is_iconic = ctypes.windll.user32.IsIconic
@@ -137,6 +146,11 @@ def _start_console_minimize_watcher() -> None:
                 try:
                     if is_iconic(hwnd):
                         _set_console_visible(False)
+                        if on_hide:
+                            try:
+                                on_hide()
+                            except Exception:
+                                pass
                 except Exception:
                     pass
             time.sleep(0.15)
@@ -652,8 +666,6 @@ def run_with_tray(controller: "FanController") -> None:
     # The user should use the tray icon's "Hide Console" or "Quit" instead.
     _disable_console_close_button()
     _install_console_close_handler()
-    # Treat the minimize button as "hide console".
-    _start_console_minimize_watcher()
 
     dashboard = DashboardWindow(controller)
     dashboard_warning_emitted = False
@@ -735,6 +747,9 @@ def run_with_tray(controller: "FanController") -> None:
         "ASUS Fan Control Enhanced",
         menu,
     )
+
+    # Minimize-to-hide watcher needs the icon so it can refresh the menu label.
+    _start_console_minimize_watcher(on_hide=icon.update_menu)
 
     # -- Background threads --------------------------------------------------
 
