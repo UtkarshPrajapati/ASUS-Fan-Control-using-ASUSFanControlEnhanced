@@ -279,10 +279,14 @@ def _ensure_console_window(logger: logging.Logger) -> bool:
         if not allocated:
             return False
 
-        # Hide the freshly allocated console immediately so there is no
-        # visible flash when console_visible_on_start is false.  The caller
-        # will call _set_console_visible(True) if the console should be shown.
-        _set_console_visible(False)
+        # Minimize then hide the freshly allocated console so even the
+        # brief flash between AllocConsole and hide is just a taskbar blip
+        # rather than a full window.  The caller will call
+        # _set_console_visible(True) if the console should be shown.
+        hwnd = _get_console_window()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 6)   # SW_MINIMIZE
+        _set_console_visible(False)                     # SW_HIDE
 
         # Rebind std streams to the newly allocated console.
         sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)

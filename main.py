@@ -1,5 +1,36 @@
 """ASUSFanControlEnhanced - Dynamic fan control for ASUS laptops."""
 
+# ---------------------------------------------------------------------------
+# Early console hide -- runs before heavy imports so the inherited console
+# window is hidden within milliseconds of process start.  Only activates
+# when tray mode is enabled and console_visible_on_start is false.
+# ---------------------------------------------------------------------------
+def _early_console_hide() -> None:
+    import sys, os, json                           # noqa: E401 (fast stdlib)
+    if sys.platform != "win32" or "--no-tray" in sys.argv:
+        return
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        cfg: dict = {}
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            pass
+        if not cfg.get("enable_tray", True) or cfg.get("console_visible_on_start", False):
+            return
+        import ctypes
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 6)   # SW_MINIMIZE
+            ctypes.windll.user32.ShowWindow(hwnd, 0)   # SW_HIDE
+    except Exception:
+        pass
+
+_early_console_hide()
+del _early_console_hide
+# ---------------------------------------------------------------------------
+
 import argparse
 import json
 import logging
