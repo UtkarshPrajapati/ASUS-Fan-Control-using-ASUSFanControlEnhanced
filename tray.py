@@ -198,6 +198,45 @@ def _get_work_area_bounds() -> Optional[tuple[int, int, int, int]]:
     return (rect.left, rect.top, rect.right, rect.bottom)
 
 
+def _is_taskbar_autohide() -> bool:
+    """Check if the Windows taskbar is set to auto-hide."""
+    if sys.platform != "win32":
+        return False
+    try:
+        class APPBARDATA(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", ctypes.c_ulong),
+                ("hWnd", wintypes.HWND),
+                ("uCallbackMessage", ctypes.c_uint),
+                ("uEdge", ctypes.c_uint),
+                ("rc", wintypes.RECT),
+                ("lParam", ctypes.c_int),
+            ]
+        abd = APPBARDATA()
+        abd.cbSize = ctypes.sizeof(APPBARDATA)
+        ABM_GETSTATE = 0x04
+        ABS_AUTOHIDE = 0x01
+        state = ctypes.windll.shell32.SHAppBarMessage(ABM_GETSTATE, ctypes.byref(abd))
+        return bool(state & ABS_AUTOHIDE)
+    except Exception:
+        return False
+
+
+def _get_taskbar_height() -> int:
+    """Return the height (in physical pixels) of the primary taskbar."""
+    if sys.platform != "win32":
+        return 0
+    try:
+        hwnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
+        if not hwnd:
+            return 48
+        rect = wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+        return max(rect.bottom - rect.top, 0)
+    except Exception:
+        return 48
+
+
 def _compute_dashboard_position(
     root: "tk.Tk",
     width: int,
@@ -237,6 +276,14 @@ def _compute_dashboard_position(
             # Guard against invalid conversions.
             if right <= left or bottom <= top:
                 left, top, right, bottom = 0, 0, screen_w, screen_h
+
+            # When the taskbar is auto-hidden the work area extends to the
+            # screen edge, but the taskbar still pops up on hover.  Shrink the
+            # usable area by the taskbar height so the dashboard doesn't hide
+            # behind it.
+            if _is_taskbar_autohide():
+                tb_h = _get_taskbar_height()
+                bottom -= int(tb_h * scale_y)
 
     pos_x = max(left + margin, right - width - margin)
     pos_y = max(top + margin, bottom - height - margin - bottom_safe_margin)
